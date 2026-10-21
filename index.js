@@ -96,10 +96,9 @@ app.post('/webhook', async (req, res) => {
       return;
     }
 
-    if (!msg || msg.type !== 'text') return;
+    if (!msg) return;
 
     const phone = msg.from;
-    const text = msg.text.body;
     const vendorId = await getOrCreateVendor(phone);
 
     const logged = await pool.query(
@@ -113,6 +112,17 @@ app.post('/webhook', async (req, res) => {
       console.log('Duplicate message ignored:', msg.id);
       return;
     }
+
+    if (msg.type !== 'text') {
+      if (msg.type === 'audio') {
+        await sendWhatsAppMessage(phone, "Samahani, bado siwezi kusikiliza ujumbe wa sauti. Tafadhali andika, mfano: nimeuza 5000");
+      } else if (['image', 'video', 'document', 'sticker', 'location', 'contacts'].includes(msg.type)) {
+        await sendWhatsAppMessage(phone, "Samahani, ninaelewa ujumbe wa maandishi tu. Andika, mfano: nimeuza 5000 au nimenunua unga 20000");
+      }
+      return; // reactions and other types: logged, no reply
+    }
+
+    const text = msg.text.body;
 
     const parsed = parseLedgerEntry(text);
 
