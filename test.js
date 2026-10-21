@@ -48,6 +48,16 @@ for (const [text, expected] of multi) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${JSON.stringify(text).padEnd(42)} -> ${JSON.stringify(r.map(e => [e.type, e.amount, e.confidence]))}`);
 }
-const total = cases.length + multi.length;
+// Summary commands
+const { parseCommand } = require('./summary');
+const cmds = [['Leo', 'leo'], ['leo?', 'leo'], ['  WIKI hii ', 'wiki'], ['salio!', 'salio'], ['mwezi huu', 'mwezi'],
+  ['jana', 'jana'], ['help', 'msaada'], ['nimeuza leo 5000', null], ['habari', null]];
+for (const [text, expected] of cmds) {
+  const r = parseCommand(text);
+  const ok = r === expected;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  command ${JSON.stringify(text).padEnd(34)} -> ${r}`);
+}
+const total = cases.length + multi.length + cmds.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

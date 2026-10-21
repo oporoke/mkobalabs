@@ -5,6 +5,7 @@ process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', 
 const pool = require('./db');
 const { parseLedgerEntry } = require('./parser');
 const { parseLedgerEntries } = require('./parser');
+const { parseCommand, commandReply } = require('./summary');
 const axios = require('axios');
 const express = require('express');
 const app = express();
@@ -151,8 +152,13 @@ app.post('/webhook', async (req, res) => {
     }
 
     const text = msg.text.body;
+    const command = parseCommand(text);
+    if (command) {
+      await sendWhatsAppMessage(phone, await commandReply(pool, vendorId, command));
+      return;
+    }
 
-        const entries = parseLedgerEntries(text);
+    const entries = parseLedgerEntries(text);
     const unclear = entries.filter(e => e.confidence < 0.6);
 
     if (entries.length === 0 || unclear.length) {
