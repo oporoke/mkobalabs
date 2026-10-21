@@ -65,14 +65,14 @@ async function sendWhatsAppMessage(to, body) {
 }
 
 async function getOrCreateVendor(phone) {
-  const existing = await pool.query('SELECT id FROM vendors WHERE phone_number = $1', [phone]);
-  if (existing.rows.length) return existing.rows[0].id;
-  const inserted = await pool.query(
-    `INSERT INTO vendors (phone_number, name, onboarded_via) VALUES ($1, $2, 'whatsapp') RETURNING id`,
-    [phone, phone] // name defaults to phone number until vendor sets one — fine for Phase 1 testing
+  const { rows } = await pool.query(
+    `INSERT INTO vendors (phone_number, name, onboarded_via)
+     VALUES ($1, $1, 'whatsapp')
+     ON CONFLICT (phone_number) DO UPDATE SET phone_number = EXCLUDED.phone_number
+     RETURNING id`,
+    [phone]
   );
-  return inserted.rows[0].id;
-
+  return rows[0].id;
 }
 
 app.get("/", async (req, res) => {
@@ -100,13 +100,14 @@ app.post('/webhook', async (req, res) => {
 
     const phone = msg.from;
     const text = msg.text.body;
+    const vendorId = await getOrCreateVendor(phone);
 
     const logged = await pool.query(
-      `INSERT INTO messages_log (wa_message_id, phone_number, channel, direction, raw_payload)
-       VALUES ($1, $2, 'whatsapp', 'inbound', $3)
+      `INSERT INTO messages_log (wa_message_id, vendor_id, phone_number, channel, direction, raw_payload)
+       VALUES ($1, $2, $3, 'whatsapp', 'inbound', $4)
        ON CONFLICT (wa_message_id) DO NOTHING
        RETURNING id`,
-      [msg.id, phone, JSON.stringify(msg)]
+      [msg.id, vendorId, phone, JSON.stringify(msg)]
     );
     if (logged.rowCount === 0) {
       console.log('Duplicate message ignored:', msg.id);
@@ -120,7 +121,7 @@ app.post('/webhook', async (req, res) => {
       return;
     }
 
-    const vendorId = await getOrCreateVendor(phone);
+
     await pool.query(
       `INSERT INTO transactions (vendor_id, type, direction, amount_tsh, raw_input, channel, parse_confidence)
        VALUES ($1, $2, $3, $4, $5, 'whatsapp', $6)`,
