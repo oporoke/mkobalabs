@@ -8,6 +8,7 @@ const { parseLedgerEntries } = require('./parser');
 const axios = require('axios');
 const express = require('express');
 const app = express();
+app.set('trust proxy', 'loopback'); // trust X-Forwarded-For only from nginx on this machine
 app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
 function validSignature(req) {
