@@ -1,5 +1,7 @@
 require('dotenv').config();
 
+process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
+
 const pool = require('./db');
 const { parseLedgerEntry } = require('./parser');
 const axios = require('axios');
@@ -81,45 +83,57 @@ app.get("/", async (req, res) => {
 app.post('/webhook', async (req, res) => {
   console.log("Called");
   res.sendStatus(200); // ack immediately — do the work after
-  console.log('Received on phone_number_id:', req.body.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id);
-  const status = req.body.entry?.[0]?.changes?.[0]?.value?.statuses?.[0];
-  if (status) {
-    console.log('Status:', status.status, JSON.stringify(status.errors || []));
-    return;
-  }
-  const msg = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-  if (!msg || msg.type !== 'text') return;
 
-  const phone = msg.from;
-  const text = msg.text.body;
+  const value = req.body.entry?.[0]?.changes?.[0]?.value;
+  const msg = value?.messages?.[0];
+
+  try {
+    console.log('Received on phone_number_id:', value?.metadata?.phone_number_id);
+
+    const status = value?.statuses?.[0];
+    if (status) {
+      console.log('Status:', status.status, JSON.stringify(status.errors || []));
+      return;
+    }
+
+    if (!msg || msg.type !== 'text') return;
+
+    const phone = msg.from;
+    const text = msg.text.body;
 
     const logged = await pool.query(
-    `INSERT INTO messages_log (wa_message_id, phone_number, channel, direction, raw_payload)
-     VALUES ($1, $2, 'whatsapp', 'inbound', $3)
-     ON CONFLICT (wa_message_id) DO NOTHING
-     RETURNING id`,
-    [msg.id, phone, JSON.stringify(msg)]
-  );
-  if (logged.rowCount === 0) {
-    console.log('Duplicate message ignored:', msg.id);
-    return;
+      `INSERT INTO messages_log (wa_message_id, phone_number, channel, direction, raw_payload)
+       VALUES ($1, $2, 'whatsapp', 'inbound', $3)
+       ON CONFLICT (wa_message_id) DO NOTHING
+       RETURNING id`,
+      [msg.id, phone, JSON.stringify(msg)]
+    );
+    if (logged.rowCount === 0) {
+      console.log('Duplicate message ignored:', msg.id);
+      return;
+    }
+
+    const parsed = parseLedgerEntry(text);
+
+    if (parsed.confidence < 0.6) {
+      await sendWhatsAppMessage(phone, "Samahani, sikuelewa vizuri. Ulitumia/uliuza kiasi gani, TSh ngapi?");
+      return;
+    }
+
+    const vendorId = await getOrCreateVendor(phone);
+    await pool.query(
+      `INSERT INTO transactions (vendor_id, type, direction, amount_tsh, raw_input, channel, parse_confidence)
+       VALUES ($1, $2, $3, $4, $5, 'whatsapp', $6)`,
+      [vendorId, parsed.type, parsed.direction, parsed.amount, text, parsed.confidence]
+    );
+
+    await sendWhatsAppMessage(phone, `Sawa! Umeongeza: ${parsed.type} TSh ${parsed.amount}. Asante!`);
+  } catch (err) {
+    console.error('Webhook processing failed:', msg?.id || '(no message id)', err.stack);
+    if (msg?.from) {
+      await sendWhatsAppMessage(msg.from, "Samahani, kuna tatizo la mfumo. Tafadhali tuma tena baada ya muda mfupi.");
+    }
   }
-
-  const parsed = parseLedgerEntry(text);
-
-  if (parsed.confidence < 0.6) {
-    await sendWhatsAppMessage(phone, "Samahani, sikuelewa vizuri. Ulitumia/uliuza kiasi gani, TSh ngapi?");
-    return;
-  }
-
-  const vendorId = await getOrCreateVendor(phone);
-  await pool.query(
-    `INSERT INTO transactions (vendor_id, type, direction, amount_tsh, raw_input, channel, parse_confidence)
-     VALUES ($1, $2, $3, $4, $5, 'whatsapp', $6)`,
-    [vendorId, parsed.type, parsed.direction, parsed.amount, text, parsed.confidence]
-  );
-
-  await sendWhatsAppMessage(phone, `Sawa! Umeongeza: ${parsed.type} TSh ${parsed.amount}. Asante!`);
 });
 
 app.listen(3000, () => console.log('Mkoba server running on port 3000'));
