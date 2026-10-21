@@ -93,11 +93,17 @@ app.post('/webhook', async (req, res) => {
   const phone = msg.from;
   const text = msg.text.body;
 
-  await pool.query(
-    `INSERT INTO messages_log (phone_number, channel, direction, raw_payload)
-     VALUES ($1, 'whatsapp', 'inbound', $2)`,
-    [phone, JSON.stringify(msg)]
+    const logged = await pool.query(
+    `INSERT INTO messages_log (wa_message_id, phone_number, channel, direction, raw_payload)
+     VALUES ($1, $2, 'whatsapp', 'inbound', $3)
+     ON CONFLICT (wa_message_id) DO NOTHING
+     RETURNING id`,
+    [msg.id, phone, JSON.stringify(msg)]
   );
+  if (logged.rowCount === 0) {
+    console.log('Duplicate message ignored:', msg.id);
+    return;
+  }
 
   const parsed = parseLedgerEntry(text);
 
