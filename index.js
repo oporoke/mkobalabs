@@ -1,5 +1,5 @@
 require('dotenv').config();
-
+const crypto = require('crypto');
 process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
 
 const pool = require('./db');
@@ -8,7 +8,16 @@ const { parseLedgerEntries } = require('./parser');
 const axios = require('axios');
 const express = require('express');
 const app = express();
-app.use(express.json());
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+
+function validSignature(req) {
+  const secret = process.env.META_APP_SECRET;
+  const header = req.get('x-hub-signature-256') || '';
+  if (!secret || !req.rawBody || !header.startsWith('sha256=')) return false;
+  const expected = Buffer.from('sha256=' + crypto.createHmac('sha256', secret).update(req.rawBody).digest('hex'));
+  const received = Buffer.from(header);
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+}
 
 // Meta's one-time webhook verification handshake
 app.get('/webhook', (req, res) => {
@@ -82,6 +91,10 @@ app.get("/", async (req, res) => {
 
 
 app.post('/webhook', async (req, res) => {
+  if (!validSignature(req)) {
+    console.warn('Rejected webhook: invalid signature from', req.ip);
+    return res.sendStatus(401);
+  }
   console.log("Called");
   res.sendStatus(200); // ack immediately — do the work after
 
