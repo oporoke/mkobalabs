@@ -60,7 +60,7 @@ async function getSummaryRows(pool, vendorId, period) {
   const { rows } = await pool.query(
     `SELECT type, SUM(amount_tsh) AS total, COUNT(*) AS n
        FROM transactions
-      WHERE vendor_id = $1 AND deleted_at IS NULL ${range}
+      WHERE vendor_id = $1 AND deleted_at IS NULL AND status = 'confirmed' ${range}
       GROUP BY type`,
     [vendorId]
   );

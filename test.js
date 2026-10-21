@@ -70,6 +70,15 @@ for (const [text, expected] of corr) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  correction ${JSON.stringify(text).padEnd(31)} -> ${JSON.stringify(r)}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length;
+// Confirmations
+const { parseConfirmation } = require('./ledger');
+const conf = [['NDIO', 'yes'], ['ndiyo!', 'yes'], ['sawa', 'yes'], ['Hapana', 'no'], ['no', 'no'], ['nimeuza 5000', null], ['leo', null]];
+for (const [text, expected] of conf) {
+  const r = parseConfirmation(text);
+  const ok = r === expected;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  confirm ${JSON.stringify(text).padEnd(34)} -> ${r}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

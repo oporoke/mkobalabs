@@ -5,6 +5,7 @@ process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', 
 const pool = require('./db');
 const { parseLedgerEntry } = require('./parser');
 const { parseLedgerEntries } = require('./parser');
+const { recordEntries, confirmationReply } = require('./ledger');
 const { parseCorrection, correctionReply } = require('./corrections');
 const { parseCommand, commandReply } = require('./summary');
 const axios = require('axios');
@@ -22,18 +23,10 @@ function validSignature(req) {
   return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
-const LABELS = { sale: 'mauzo', purchase: 'manunuzi', expense: 'matumizi' };
-const fmtTsh = n => 'TSh ' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
-const capitalize = s => s.charAt(0).toUpperCase() + s.slice(1);
 
-function confirmationMessage(entries) {
-  if (entries.length === 1) {
-    const e = entries[0];
-    return `Sawa! Nimeongeza ${LABELS[e.type] || e.type} ${fmtTsh(e.amount)}. Asante!`;
-  }
-  const lines = entries.map(e => `- ${capitalize(LABELS[e.type] || e.type)} ${fmtTsh(e.amount)}`).join('\n');
-  return `Sawa! Nimeongeza:\n${lines}\nAsante!`;
-}
+// const fmtTsh = n => 'TSh ' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+// const capitalize = s => s.charAt(0).toUpperCase() + s.slice(1);
+
 
 // Meta's one-time webhook verification handshake
 app.get('/webhook', (req, res) => {
@@ -164,36 +157,23 @@ app.post('/webhook', async (req, res) => {
       return;
     }
 
-    const entries = parseLedgerEntries(text);
-    const unclear = entries.filter(e => e.confidence < 0.6);
-
-    if (entries.length === 0 || unclear.length) {
-      const what = unclear.length && entries.length > 1 ? ` "${unclear[0].text}"` : '';
-      await sendWhatsAppMessage(phone, `Samahani, sikuelewa vizuri${what}. Ulitumia/uliuza kiasi gani, TSh ngapi?`);
+    const confirmation = await confirmationReply(pool, vendorId, text);
+    if (confirmation) {
+      await sendWhatsAppMessage(phone, confirmation);
       return;
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      for (const e of entries) {
-          await client.query(
-          `INSERT INTO transactions (vendor_id, message_id, type, direction, amount_tsh, raw_input, channel, parse_confidence)
-           VALUES ($1, $2, $3, $4, $5, $6, 'whatsapp', $7)`,
-          [vendorId, logged.rows[0].id, e.type, e.direction, e.amount, e.text, e.confidence]
-        );
-      }
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err; // handled by the outer catch
-    } finally {
-      client.release();
-    }
+    await sendWhatsAppMessage(phone, await recordEntries(pool, vendorId, logged.rows[0].id, text));
+    // } catch (err) {
+    //   await client.query('ROLLBACK');
+    //   throw err; // handled by the outer catch
+    // } finally {
+    //   client.release();
+    // }
 
-    // const lines = entries.map(e => `- ${e.type} TSh ${e.amount}`).join('\n');
-    // await sendWhatsAppMessage(phone, `Sawa! Nimeongeza:\n${lines}\nAsante!`);
-      await sendWhatsAppMessage(phone, confirmationMessage(entries));
+    // // const lines = entries.map(e => `- ${e.type} TSh ${e.amount}`).join('\n');
+    // // await sendWhatsAppMessage(phone, `Sawa! Nimeongeza:\n${lines}\nAsante!`);
+    //   await sendWhatsAppMessage(phone, confirmationMessage(entries));
   } catch (err) {
     console.error('Webhook processing failed:', msg?.id || '(no message id)', err.stack);
     if (msg?.from) {
