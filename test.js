@@ -58,6 +58,18 @@ for (const [text, expected] of cmds) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  command ${JSON.stringify(text).padEnd(34)} -> ${r}`);
 }
-const total = cases.length + multi.length + cmds.length;
+// Corrections
+const { parseCorrection } = require('./corrections');
+const corr = [['futa', { action: 'undo' }], ['Futa!', { action: 'undo' }], ['undo', { action: 'undo' }],
+  ['rekebisha 6000', { action: 'correct', amount: 6000 }], ['Rekebisha 6,500', { action: 'correct', amount: 6500 }],
+  ['badilisha elfu kumi', { action: 'correct', amount: 10000 }], ['rekebisha', { action: 'correct', amount: null }],
+  ['futa kabisa akaunti', null], ['nimeuza 5000', null]];
+for (const [text, expected] of corr) {
+  const r = parseCorrection(text);
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  correction ${JSON.stringify(text).padEnd(31)} -> ${JSON.stringify(r)}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

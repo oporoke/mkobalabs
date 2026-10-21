@@ -24,6 +24,8 @@ const HELP = [
   'Mkoba - jinsi ya kutumia:',
   '• Rekodi: nimeuza 5000, nimenunua unga 20000, nimelipa nauli 2000',
   '• Muhtasari: leo, jana, wiki, mwezi, salio',
+  '• Kufuta rekodi ya mwisho: futa',
+  '• Kubadilisha kiasi cha mwisho: rekebisha 6000',
   '• Msaada: msaada',
 ].join('\n');
 
@@ -32,7 +34,7 @@ function parseCommand(text) {
   return LOOKUP[t] || null;
 }
 
-const fmtTsh = n => 'TSh ' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const { fmtTsh } = require('./format');
 
 function formatSummary(period, rows) {
   const { title } = PERIODS[period];
@@ -58,7 +60,7 @@ async function getSummaryRows(pool, vendorId, period) {
   const { rows } = await pool.query(
     `SELECT type, SUM(amount_tsh) AS total, COUNT(*) AS n
        FROM transactions
-      WHERE vendor_id = $1 ${range}
+      WHERE vendor_id = $1 AND deleted_at IS NULL ${range}
       GROUP BY type`,
     [vendorId]
   );

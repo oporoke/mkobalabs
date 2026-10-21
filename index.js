@@ -5,6 +5,7 @@ process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', 
 const pool = require('./db');
 const { parseLedgerEntry } = require('./parser');
 const { parseLedgerEntries } = require('./parser');
+const { parseCorrection, correctionReply } = require('./corrections');
 const { parseCommand, commandReply } = require('./summary');
 const axios = require('axios');
 const express = require('express');
@@ -157,6 +158,11 @@ app.post('/webhook', async (req, res) => {
       await sendWhatsAppMessage(phone, await commandReply(pool, vendorId, command));
       return;
     }
+    const correction = parseCorrection(text);
+    if (correction) {
+      await sendWhatsAppMessage(phone, await correctionReply(pool, vendorId, correction));
+      return;
+    }
 
     const entries = parseLedgerEntries(text);
     const unclear = entries.filter(e => e.confidence < 0.6);
@@ -171,10 +177,10 @@ app.post('/webhook', async (req, res) => {
     try {
       await client.query('BEGIN');
       for (const e of entries) {
-        await client.query(
-          `INSERT INTO transactions (vendor_id, type, direction, amount_tsh, raw_input, channel, parse_confidence)
-           VALUES ($1, $2, $3, $4, $5, 'whatsapp', $6)`,
-          [vendorId, e.type, e.direction, e.amount, e.text, e.confidence]
+          await client.query(
+          `INSERT INTO transactions (vendor_id, message_id, type, direction, amount_tsh, raw_input, channel, parse_confidence)
+           VALUES ($1, $2, $3, $4, $5, $6, 'whatsapp', $7)`,
+          [vendorId, logged.rows[0].id, e.type, e.direction, e.amount, e.text, e.confidence]
         );
       }
       await client.query('COMMIT');
