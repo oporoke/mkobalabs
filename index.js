@@ -81,6 +81,7 @@ app.get("/", async (req, res) => {
 app.post('/webhook', async (req, res) => {
   console.log("Called");
   res.sendStatus(200); // ack immediately — do the work after
+  console.log('Received on phone_number_id:', req.body.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id);
   const status = req.body.entry?.[0]?.changes?.[0]?.value?.statuses?.[0];
   if (status) {
     console.log('Status:', status.status, JSON.stringify(status.errors || []));
