@@ -110,4 +110,29 @@ function parseLedgerEntry(text) {
   };
 }
 
-module.exports = { parseLedgerEntry };
+// Split a message into one segment per entry: by line, then at each verb (nimeuza ... nimenunua ...).
+// Text before the first verb on a line stays with that verb ("leo nimeuza 5000").
+function splitEntries(text) {
+  const segments = [];
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const lower = line.toLowerCase();
+    const starts = [];
+    for (const t of TYPES) {
+      for (const m of lower.matchAll(new RegExp(t.re.source, 'g'))) starts.push(m.index);
+    }
+    starts.sort((a, b) => a - b);
+    const cuts = [0, ...starts.slice(1), line.length];
+    for (let i = 0; i < cuts.length - 1; i++) {
+      const seg = line.slice(cuts[i], cuts[i + 1]).replace(/^[\s,;.]+|[\s,;.]+$/g, '');
+      if (seg) segments.push(seg);
+    }
+  }
+  return segments;
+}
+
+// Returns one parsed entry per segment, each with its source text.
+function parseLedgerEntries(text) {
+  return splitEntries(text).map(seg => ({ ...parseLedgerEntry(seg), text: seg }));
+}
+
+module.exports = { parseLedgerEntry, parseLedgerEntries, splitEntries };

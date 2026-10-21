@@ -1,4 +1,4 @@
-const { parseLedgerEntry: p } = require('./parser');
+const { parseLedgerEntry: p, parseLedgerEntries: pm } = require('./parser');
 const cases = [
   ['Nimeuza 53 plates TSH 15000', 'sale', 15000, true],
   ['nimeuza 15000', 'sale', 15000, true],
@@ -32,5 +32,22 @@ for (const [text, type, amount, save] of cases) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${text.padEnd(42)} -> ${JSON.stringify(r)}`);
 }
-console.log(`\n${cases.length - fail}/${cases.length} passed`);
+
+// Multi-entry messages: [text, [[type, amount], ...]]
+const multi = [
+  ['nimeuza 30000 nimenunua mkaa 5000', [['sale', 30000], ['purchase', 5000]]],
+  ['nimeuza 30,000, nimenunua mkaa 5000', [['sale', 30000], ['purchase', 5000]]],
+  ['leo nimeuza chips 15k na nimelipa nauli 2000', [['sale', 15000], ['expense', 2000]]],
+  ['nimeuza chips 5000\nnimeuza soda 2000\nnimenunua mkaa elfu tatu', [['sale', 5000], ['sale', 2000], ['purchase', 3000]]],
+  ['nimeuza elfu kumi na tano', [['sale', 15000]]],
+  ['Nimeuza 53 plates TSH 15000', [['sale', 15000]]],
+];
+for (const [text, expected] of multi) {
+  const r = pm(text);
+  const ok = r.length === expected.length && r.every((e, i) => e.type === expected[i][0] && e.amount === expected[i][1] && e.confidence >= 0.6);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${JSON.stringify(text).padEnd(42)} -> ${JSON.stringify(r.map(e => [e.type, e.amount, e.confidence]))}`);
+}
+const total = cases.length + multi.length;
+console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

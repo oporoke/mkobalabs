@@ -4,6 +4,7 @@ process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', 
 
 const pool = require('./db');
 const { parseLedgerEntry } = require('./parser');
+const { parseLedgerEntries } = require('./parser');
 const axios = require('axios');
 const express = require('express');
 const app = express();
@@ -124,21 +125,35 @@ app.post('/webhook', async (req, res) => {
 
     const text = msg.text.body;
 
-    const parsed = parseLedgerEntry(text);
+        const entries = parseLedgerEntries(text);
+    const unclear = entries.filter(e => e.confidence < 0.6);
 
-    if (parsed.confidence < 0.6) {
-      await sendWhatsAppMessage(phone, "Samahani, sikuelewa vizuri. Ulitumia/uliuza kiasi gani, TSh ngapi?");
+    if (entries.length === 0 || unclear.length) {
+      const what = unclear.length && entries.length > 1 ? ` "${unclear[0].text}"` : '';
+      await sendWhatsAppMessage(phone, `Samahani, sikuelewa vizuri${what}. Ulitumia/uliuza kiasi gani, TSh ngapi?`);
       return;
     }
 
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const e of entries) {
+        await client.query(
+          `INSERT INTO transactions (vendor_id, type, direction, amount_tsh, raw_input, channel, parse_confidence)
+           VALUES ($1, $2, $3, $4, $5, 'whatsapp', $6)`,
+          [vendorId, e.type, e.direction, e.amount, e.text, e.confidence]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err; // handled by the outer catch
+    } finally {
+      client.release();
+    }
 
-    await pool.query(
-      `INSERT INTO transactions (vendor_id, type, direction, amount_tsh, raw_input, channel, parse_confidence)
-       VALUES ($1, $2, $3, $4, $5, 'whatsapp', $6)`,
-      [vendorId, parsed.type, parsed.direction, parsed.amount, text, parsed.confidence]
-    );
-
-    await sendWhatsAppMessage(phone, `Sawa! Umeongeza: ${parsed.type} TSh ${parsed.amount}. Asante!`);
+    const lines = entries.map(e => `- ${e.type} TSh ${e.amount}`).join('\n');
+    await sendWhatsAppMessage(phone, `Sawa! Nimeongeza:\n${lines}\nAsante!`);
   } catch (err) {
     console.error('Webhook processing failed:', msg?.id || '(no message id)', err.stack);
     if (msg?.from) {
