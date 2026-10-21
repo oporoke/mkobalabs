@@ -20,6 +20,19 @@ function validSignature(req) {
   return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
+const LABELS = { sale: 'mauzo', purchase: 'manunuzi', expense: 'matumizi' };
+const fmtTsh = n => 'TSh ' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const capitalize = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+function confirmationMessage(entries) {
+  if (entries.length === 1) {
+    const e = entries[0];
+    return `Sawa! Nimeongeza ${LABELS[e.type] || e.type} ${fmtTsh(e.amount)}. Asante!`;
+  }
+  const lines = entries.map(e => `- ${capitalize(LABELS[e.type] || e.type)} ${fmtTsh(e.amount)}`).join('\n');
+  return `Sawa! Nimeongeza:\n${lines}\nAsante!`;
+}
+
 // Meta's one-time webhook verification handshake
 app.get('/webhook', (req, res) => {
   console.log('=== Incoming webhook ===');
@@ -166,8 +179,9 @@ app.post('/webhook', async (req, res) => {
       client.release();
     }
 
-    const lines = entries.map(e => `- ${e.type} TSh ${e.amount}`).join('\n');
-    await sendWhatsAppMessage(phone, `Sawa! Nimeongeza:\n${lines}\nAsante!`);
+    // const lines = entries.map(e => `- ${e.type} TSh ${e.amount}`).join('\n');
+    // await sendWhatsAppMessage(phone, `Sawa! Nimeongeza:\n${lines}\nAsante!`);
+      await sendWhatsAppMessage(phone, confirmationMessage(entries));
   } catch (err) {
     console.error('Webhook processing failed:', msg?.id || '(no message id)', err.stack);
     if (msg?.from) {
