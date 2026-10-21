@@ -162,4 +162,6 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-app.listen(3000, () => console.log('Mkoba server running on port 3000'));
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || '127.0.0.1';
+app.listen(PORT, HOST, () => console.log(`Mkoba server running on ${HOST}:${PORT}`));
