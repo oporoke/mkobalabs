@@ -34,9 +34,9 @@ async function recordEntries(pool, vendorId, messageId, text) {
     );
     for (const e of entries) {
       await client.query(
-        `INSERT INTO transactions (vendor_id, message_id, type, direction, amount_tsh, raw_input, channel, parse_confidence, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'whatsapp', $7, $8)`,
-        [vendorId, messageId, e.type, e.direction, e.amount, e.text, e.confidence, status]
+        `INSERT INTO transactions (vendor_id, message_id, type, direction, amount_tsh, raw_input, channel, parse_confidence, status, item, quantity, unit)
+         VALUES ($1, $2, $3, $4, $5, $6, 'whatsapp', $7, $8, $9, $10, $11)`,
+        [vendorId, messageId, e.type, e.direction, e.amount, e.text, e.confidence, status, e.item, e.quantity, e.unit]
       );
     }
     await client.query('COMMIT');
@@ -71,10 +71,10 @@ async function confirmationReply(pool, vendorId, text) {
     const { rows } = await pool.query(
       `UPDATE transactions SET status = 'confirmed', updated_at = now()
         WHERE vendor_id = $1 AND message_id = $2 AND status = 'pending' AND deleted_at IS NULL
-        RETURNING type, amount_tsh`,
+        RETURNING type, amount_tsh, item, quantity, unit`,
       [vendorId, latest.message_id]
     );
-    return savedMessage(rows.map(r => ({ type: r.type, amount: r.amount_tsh })));
+    return savedMessage(rows.map(r => ({ ...r, amount: r.amount_tsh })));
   }
 
   await pool.query(

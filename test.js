@@ -79,6 +79,26 @@ for (const [text, expected] of conf) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  confirm ${JSON.stringify(text).padEnd(34)} -> ${r}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length;
+// Items and quantities: [text, item, quantity, unit]
+const items = [
+  ['Nimeuza 53 plates TSH 15000', 'plates', 53, null],
+  ['Nimeuza chips 15,000', 'chips', null, null],
+  ['nimeuza sabuni moja kwa elfu mbili', 'sabuni', 1, null],
+  ['nimenunua mchele kilo 10 kwa 25000', 'mchele', 10, 'kg'],
+  ['nimenunua unga 10kg 12000', 'unga', 10, 'kg'],
+  ['nimenunua mafuta lita 5 kwa 18000', 'mafuta', 5, 'l'],
+  ['nimeuza vipande 3 vya sabuni 4500', 'sabuni', 3, 'pcs'],
+  ['sold 3 bags for 45000 tsh', 'bags', 3, null],
+  ['nimelipa kodi 50000', 'kodi', null, null],
+  ['mauzo ya leo 85000', null, null, null],
+  ['nimeuza 15k', null, null, null],
+];
+for (const [text, item, quantity, unit] of items) {
+  const r = p(text);
+  const ok = r.item === item && r.quantity === quantity && r.unit === unit;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  item ${JSON.stringify(text).padEnd(37)} -> ${r.item} | ${r.quantity} ${r.unit || ''}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

@@ -1,6 +1,6 @@
 // Undo ("futa") and correct ("rekebisha 6000") the vendor's most recent entry.
 const { parseLedgerEntry } = require('./parser');
-const { fmtTsh, capitalize, label } = require('./format');
+const { fmtTsh, describe } = require('./format');
 
 const UNDO = new Set(['futa', 'futa ya mwisho', 'futa hiyo', 'ondoa', 'undo', 'delete']);
 const CORRECT_RE = /^\s*(rekebisha|badilisha|sahihisha|correct|edit)\b(.*)$/i;
@@ -17,7 +17,7 @@ function parseCorrection(text) {
 // The vendor's latest entry group: all live transactions from their most recent recorded message.
 async function lastGroup(db, vendorId) {
   const { rows: [last] } = await db.query(
-    `SELECT id, type, amount_tsh, message_id FROM transactions
+    `SELECT id, type, amount_tsh, message_id, item, quantity, unit FROM transactions
       WHERE vendor_id = $1 AND deleted_at IS NULL AND status = 'confirmed'
       ORDER BY id DESC LIMIT 1`,
     [vendorId]
@@ -25,7 +25,7 @@ async function lastGroup(db, vendorId) {
   if (!last) return [];
   if (last.message_id === null) return [last];
   const { rows } = await db.query(
-    `SELECT id, type, amount_tsh, message_id FROM transactions
+    `SELECT id, type, amount_tsh, message_id, item, quantity, unit FROM transactions
       WHERE vendor_id = $1 AND message_id = $2 AND deleted_at IS NULL AND status = 'confirmed'
       ORDER BY id`,
     [vendorId, last.message_id]
@@ -42,8 +42,8 @@ async function correctionReply(pool, vendorId, cmd) {
       `UPDATE transactions SET deleted_at = now() WHERE id = ANY($1::bigint[]) AND deleted_at IS NULL`,
       [group.map(r => r.id)]
     );
-    if (group.length === 1) return `Nimefuta ${label(group[0].type)} ${fmtTsh(group[0].amount_tsh)}.`;
-    return 'Nimefuta:\n' + group.map(r => `- ${capitalize(label(r.type))} ${fmtTsh(r.amount_tsh)}`).join('\n');
+    if (group.length === 1) return `Nimefuta ${describe(group[0])} ${fmtTsh(group[0].amount_tsh)}.`;
+    return 'Nimefuta:\n' + group.map(r => `- ${describe(r, true)} ${fmtTsh(r.amount_tsh)}`).join('\n');
   }
 
   // correct
@@ -56,7 +56,7 @@ async function correctionReply(pool, vendorId, cmd) {
     `UPDATE transactions SET amount_tsh = $2, updated_at = now() WHERE id = $1`,
     [r.id, cmd.amount]
   );
-  return `Nimerekebisha ${label(r.type)}: ${fmtTsh(r.amount_tsh)} → ${fmtTsh(cmd.amount)}.`;
+  return `Nimerekebisha ${describe(r)}: ${fmtTsh(r.amount_tsh)} → ${fmtTsh(cmd.amount)}.`;
 }
 
 module.exports = { parseCorrection, correctionReply };

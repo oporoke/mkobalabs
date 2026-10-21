@@ -1,4 +1,5 @@
-// Mkoba ledger parser: Swahili/English free-text entries -> { type, direction, amount, confidence }
+// Mkoba ledger parser: Swahili/English free-text entries ->
+// { type, direction, amount, confidence, item, quantity, unit }
 
 const TYPES = [
   { type: 'sale', direction: 'credit',
@@ -13,7 +14,15 @@ const UNITS = { moja: 1, mbili: 2, tatu: 3, nne: 4, tano: 5, sita: 6, saba: 7, n
   kumi: 10, ishirini: 20, thelathini: 30, arobaini: 40, hamsini: 50, sitini: 60, sabini: 70, themanini: 80, tisini: 90 };
 const MULTS = { mia: { v: 100, rank: 1 }, elfu: { v: 1000, rank: 2 }, laki: { v: 100000, rank: 3 }, milioni: { v: 1000000, rank: 4 } };
 
-// "15,000" / "15.000" / "1.5" / "15000" -> number
+// Measurement units -> normalized name
+const MEASURE = { kg: 'kg', kgs: 'kg', kilo: 'kg', kilos: 'kg', lita: 'l', litre: 'l', liter: 'l', litres: 'l', liters: 'l',
+  ltr: 'l', l: 'l', gramu: 'g', gram: 'g', grams: 'g', g: 'g', pcs: 'pcs', pc: 'pcs', vipande: 'pcs', kipande: 'pcs' };
+const MEASURE_WORDS = Object.keys(MEASURE).filter(w => w.length > 1).join('|'); // single letters only after a number
+const MEASURE_ALL = Object.keys(MEASURE).join('|');
+
+const FILLER = new Set(['kwa', 'ya', 'za', 'la', 'wa', 'cha', 'vya', 'leo', 'jana', 'na', 'tsh', 'tzs', 'sh', 'shs',
+  'shilingi', 'bob', 'bei', 'jumla', 'for', 'at', 'of', 'the', 'a', 'an', 'worth', 'today', 'yesterday', 'total', 'k', 'm']);
+
 function toNumber(s) {
   if (/^\d{1,3}(?:[,.]\d{3})+$/.test(s)) return parseFloat(s.replace(/[,.]/g, ''));
   return parseFloat(s.replace(/,/g, ''));
@@ -44,38 +53,44 @@ function parseWords(tokens) {
   return num(5);
 }
 
-function findAmounts(lower) {
-  const out = []; // { value, strong }
+const overlaps = (a, b) => a.start < b.end && b.start < a.end;
+
+// Quantities attached to a unit: "kilo 10", "10 kg", "10kg", "vipande 3"
+function findMeasures(lower) {
+  const out = [];
+  for (const m of lower.matchAll(new RegExp(`\\b(\\d+(?:\\.\\d+)?)\\s*(${MEASURE_ALL})\\b`, 'g')))
+    out.push({ quantity: parseFloat(m[1]), unit: MEASURE[m[2]], start: m.index, end: m.index + m[0].length });
+  for (const m of lower.matchAll(new RegExp(`\\b(${MEASURE_WORDS})\\s+(\\d+(?:\\.\\d+)?)\\b`, 'g')))
+    out.push({ quantity: parseFloat(m[2]), unit: MEASURE[m[1]], start: m.index, end: m.index + m[0].length });
+  return out;
+}
+
+// Number candidates with their character spans: { value, strong, start, end }
+function findNumbers(lower) {
+  const out = [];
+  const add = (value, strong, start, len) => out.push({ value, strong, start, end: start + len });
   const NUM = '(\\d{1,3}(?:[,.]\\d{3})+|\\d+(?:\\.\\d+)?)';
   const CUR = '(?:tsh|tzs|shs?|shilingi|bob)';
-  const patterns = [
-    new RegExp(`\\b${CUR}\\.?\\s*${NUM}`, 'g'),          // TSh 15000
-    new RegExp(`${NUM}\\s*(?:\\/=|\\/-|${CUR}\\b)`, 'g'), // 15000/=, 15000 tsh
-  ];
-  for (const re of patterns) for (const m of lower.matchAll(re)) out.push({ value: toNumber(m[1]), strong: true, at: m.index });
+  for (const re of [new RegExp(`\\b${CUR}\\.?\\s*${NUM}`, 'g'), new RegExp(`${NUM}\\s*(?:\\/=|\\/-|${CUR}\\b)`, 'g')])
+    for (const m of lower.matchAll(re)) add(toNumber(m[1]), true, m.index, m[0].length);
+  for (const m of lower.matchAll(/\b(\d+(?:\.\d+)?)\s*(k|m)\b/g))
+    add(parseFloat(m[1]) * (m[2] === 'k' ? 1e3 : 1e6), true, m.index, m[0].length);
+  for (const m of lower.matchAll(/\b\d{1,3}(?:,\d{3})+\b/g)) add(toNumber(m[0]), true, m.index, m[0].length);
+  for (const m of lower.matchAll(/\b\d+(?:\.\d+)?\b/g)) add(parseFloat(m[0]), false, m.index, m[0].length);
 
-  for (const m of lower.matchAll(/\b(\d+(?:\.\d+)?)\s*(k|m)\b/g))          // 15k, 1.5m
-    out.push({ value: parseFloat(m[1]) * (m[2] === 'k' ? 1e3 : 1e6), strong: true, at: m.index });
-
-  for (const m of lower.matchAll(/\b\d{1,3}(?:,\d{3})+\b/g))                // 20,000 (formatted -> money)
-    out.push({ value: toNumber(m[0]), strong: true, at: m.index });
-
-  for (const m of lower.matchAll(/\b\d+(?:\.\d+)?\b/g))                     // any bare number
-    out.push({ value: parseFloat(m[0]), strong: false, at: m.index });
-
-  // Swahili word runs
-  const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
-  for (let s = 0; s < tokens.length; s++) {
-    if (!(tokens[s] in UNITS || tokens[s] in MULTS)) continue;
+  const toks = [...lower.matchAll(/[a-z0-9]+/g)];
+  for (let s = 0; s < toks.length; s++) {
+    const w = toks[s][0];
+    if (!(w in UNITS || w in MULTS)) continue;
     let e = s;
-    while (e + 1 < tokens.length) {
-      const t = tokens[e + 1];
-      if (t in UNITS || t in MULTS || t === 'na' || (/^\d+$/.test(t) && tokens[e] in MULTS)) e++; else break;
+    while (e + 1 < toks.length) {
+      const t = toks[e + 1][0];
+      if (t in UNITS || t in MULTS || t === 'na' || (/^\d+$/.test(t) && toks[e][0] in MULTS)) e++; else break;
     }
-    const run = tokens.slice(s, e + 1);
-    while (run[run.length - 1] === 'na') run.pop();
+    while (e > s && toks[e][0] === 'na') e--;
+    const run = toks.slice(s, e + 1).map(t => t[0]);
     const value = parseWords(run);
-    if (value) out.push({ value, strong: run.some(t => t in MULTS), at: s });
+    if (value) add(value, run.some(t => t in MULTS), toks[s].index, toks[e].index + toks[e][0].length - toks[s].index);
     s = e;
   }
   return out.filter(a => a.value > 0);
@@ -87,39 +102,57 @@ function parseLedgerEntry(text) {
   const matched = TYPES.filter(t => t.re.test(lower));
   const kind = matched.length === 1 ? matched[0] : null;
 
-  const amounts = findAmounts(lower);
-  const strong = [...new Set(amounts.filter(a => a.strong).map(a => a.value))];
-  const bare = [...new Set(amounts.filter(a => !a.strong).map(a => a.value))];
+  const measures = findMeasures(lower);
+  // A number that is part of a measure ("kilo 10") is a quantity, never the amount.
+  const numbers = findNumbers(lower).filter(n => !measures.some(m => overlaps(n, m)));
+  const strong = [...new Set(numbers.filter(a => a.strong).map(a => a.value))];
+  const bare = [...new Set(numbers.filter(a => !a.strong).map(a => a.value))];
 
   let amount = null, amountScore = 0;
   if (strong.length === 1) { amount = strong[0]; amountScore = 1; }
-  else if (strong.length > 1) { amount = Math.max(...strong); amountScore = 0.5; }   // several money values: ambiguous
+  else if (strong.length > 1) { amount = Math.max(...strong); amountScore = 0.5; }
   else if (bare.length === 1) { amount = bare[0]; amountScore = 0.9; }
-  else if (bare.length > 1) { amount = Math.max(...bare); amountScore = 0.75; }      // e.g. "53 plates 15000"
+  else if (bare.length > 1) { amount = Math.max(...bare); amountScore = 0.75; }
 
   let confidence;
-  if (matched.length > 1) confidence = 0.4;            // sale and purchase in one message
+  if (matched.length > 1) confidence = 0.4;
   else if (!kind || amount === null) confidence = 0.3;
   else confidence = +(0.95 * amountScore).toFixed(2);
+
+  // Quantity: a measure, else the first remaining number that isn't the amount.
+  const amountSpans = numbers.filter(n => n.value === amount);
+  const rest = numbers.filter(n => n.value !== amount && !amountSpans.some(a => overlaps(n, a)))
+    .sort((a, b) => a.start - b.start);
+  let quantity = null, unit = null;
+  if (measures.length) ({ quantity, unit } = measures[0]);
+  else if (rest.length) quantity = rest[0].value;
+
+  // Item: what's left after removing the verb, numbers, units and filler words.
+  let itemText = lower;
+  const blank = (start, end) => { itemText = itemText.slice(0, start) + ' '.repeat(end - start) + itemText.slice(end); };
+  for (const t of TYPES) for (const m of lower.matchAll(new RegExp(t.re.source, 'g'))) blank(m.index, m.index + m[0].length);
+  for (const s of [...measures, ...numbers]) blank(s.start, s.end);
+  const words = (itemText.match(/[a-z]+/g) || []).filter(w => !FILLER.has(w) && !(w in MEASURE) && !(w in UNITS) && !(w in MULTS));
+  const item = words.length ? words.join(' ').slice(0, 60) : null;
 
   return {
     type: kind ? kind.type : 'unknown',
     direction: kind ? kind.direction : null,
     amount,
     confidence,
+    item,
+    quantity,
+    unit,
   };
 }
 
 // Split a message into one segment per entry: by line, then at each verb (nimeuza ... nimenunua ...).
-// Text before the first verb on a line stays with that verb ("leo nimeuza 5000").
 function splitEntries(text) {
   const segments = [];
   for (const line of String(text || '').split(/\r?\n/)) {
     const lower = line.toLowerCase();
     const starts = [];
-    for (const t of TYPES) {
-      for (const m of lower.matchAll(new RegExp(t.re.source, 'g'))) starts.push(m.index);
-    }
+    for (const t of TYPES) for (const m of lower.matchAll(new RegExp(t.re.source, 'g'))) starts.push(m.index);
     starts.sort((a, b) => a - b);
     const cuts = [0, ...starts.slice(1), line.length];
     for (let i = 0; i < cuts.length - 1; i++) {
@@ -130,7 +163,6 @@ function splitEntries(text) {
   return segments;
 }
 
-// Returns one parsed entry per segment, each with its source text.
 function parseLedgerEntries(text) {
   return splitEntries(text).map(seg => ({ ...parseLedgerEntry(seg), text: seg }));
 }
