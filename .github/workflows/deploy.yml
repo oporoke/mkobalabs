@@ -23,5 +23,5 @@ jobs:
           #   pm2 restart mkoba-app
           script: |
             set -e
-            sudo -iu mkoba bash -c 'set -e; cd /var/www/mkobalabs; git pull origin main; npm install --omit=dev; pm2 restart mkoba-app'
+            sudo -iu mkoba bash -c 'cd /var/www/mkobalabs; git pull origin main; npm install --omit=dev; node migrate.js; pm2 restart mkoba-app'
             
