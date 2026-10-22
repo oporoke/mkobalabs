@@ -170,6 +170,7 @@ function parseLedgerEntry(text) {
   else if (strong.length > 1) { amount = Math.max(...strong); amountScore = 0.5; }
   else if (bare.length === 1) { amount = bare[0]; amountScore = 0.9; }
   else if (bare.length > 1) { amount = Math.max(...bare); amountScore = 0.75; }
+  const amountKind = amount === null ? null : strong.length ? 'money' : 'bare'; // 'money' = marked as money (TSh, 15k, 15,000, elfu ...)
 
   let confidence;
   if (matched.length > 1) confidence = 0.4;
@@ -200,6 +201,7 @@ function parseLedgerEntry(text) {
     item,
     quantity,
     unit,
+    amountKind,
   };
 }
 

@@ -2,7 +2,7 @@
 const log = require('./log');
 const pool = require('./db');
 const { sendText } = require('./whatsapp');
-const { getVendor, onboardingReply, isActionable } = require('./onboarding');
+const { getVendor, onboardingReply } = require('./onboarding');
 const { t, detectLanguage, parseLanguageSwitch } = require('./i18n');
 const { parseCommand, commandReply } = require('./summary');
 const { reportSettingReply } = require('./reports');
@@ -11,6 +11,8 @@ const { recordEntries, confirmationReply } = require('./ledger');
 const { debtReply } = require('./debts');
 const { parseDashboardRequest, dashboardLinkReply } = require('./dashboard');
 const { mobileMoneyReply, transferChoiceReply, parseMobileMoney } = require('./mobilemoney');
+const { consentReply, deletionReply, privacyUrl } = require('./privacy');
+const { parseStatementCommand, statementReply } = require('./statement');
 
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
@@ -47,7 +49,10 @@ async function processWebhook(body) {
     log.info('message_received', { id: msg.id, type: msg.type, vendor: vendorId, from: log.mask(phone), new_vendor: vendor.created });
 
     const done = handler => log.info('message_handled', { id: msg.id, vendor: vendorId, handler, lang, ms: Date.now() - started });
-    const respond = async (handler, reply) => { await sendText(phone, reply); done(handler); };
+    const respond = async (handler, reply) => {
+      for (const part of [].concat(reply)) await sendText(phone, part); // a handler may return several messages
+      done(handler);
+    };
 
     // Language (item 37): explicit "english"/"kiswahili", else switch only on a clearly one-language message.
     const text = msg.type === 'text' ? msg.text?.body : null;
@@ -61,7 +66,9 @@ async function processWebhook(body) {
     }
     const L = t(lang);
 
-    if (vendor.created) await sendText(phone, L.welcome);
+    // Privacy (item 40): a new vendor first gets the welcome with the data notice, and must agree before anything is recorded.
+    if (vendor.created) return respond('consent_prompt', L.consentPrompt(privacyUrl(lang)));
+    if (!vendor.consent_at && msg.type !== 'text') return respond('consent_reminder', L.consentReminder(privacyUrl(lang)));
 
     if (msg.type !== 'text') {
       if (msg.type === 'audio') return respond('non_text', L.audioHint);
@@ -72,7 +79,7 @@ async function processWebhook(body) {
 
     const route = await routeText({ vendor, vendorId, messageId, text: msg.text.body, lang });
     if (route) return respond(route.handler, route.reply);
-    return done('welcome');
+    return done('no_reply');
   } catch (err) {
     log.error('message_failed', { id: msg.id, vendor: vendorId, error: err.message, stack: err.stack });
     if (msg.from) await sendText(msg.from, t(lang).systemError);
@@ -82,9 +89,14 @@ async function processWebhook(body) {
 // Decide which handler answers a text message. Order matters: earlier handlers win.
 // Returns { handler, reply }, or null when no reply should be sent.
 async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
+  // Deletion works with or without consent; then nothing else runs until the vendor has agreed.
+  const deletion = await deletionReply(pool, vendorId, text, lang);
+  if (deletion) return { handler: 'deletion', reply: deletion };
+  const consent = await consentReply(pool, vendor, text, lang);
+  if (consent) return { handler: 'consent', reply: consent };
+
   const onboarding = await onboardingReply(pool, vendor, text, lang);
   if (onboarding) return { handler: 'onboarding', reply: onboarding };
-  if (vendor.created && !isActionable(text)) return null; // e.g. "habari": the welcome is the reply
 
   const command = parseCommand(text);
   if (command) return { handler: `command:${command}`, reply: await commandReply(pool, vendorId, command, lang) };
@@ -93,6 +105,9 @@ async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
   if (reportSetting) return { handler: 'report_setting', reply: reportSetting };
 
   if (parseDashboardRequest(text)) return { handler: 'dashboard_link', reply: await dashboardLinkReply(pool, vendorId, lang) };
+
+  const statement = parseStatementCommand(text);
+  if (statement) return { handler: `statement:${statement}`, reply: await statementReply(pool, vendorId, statement, lang) };
 
   const correction = parseCorrection(text);
   if (correction) return { handler: `correction:${correction.action}`, reply: await correctionReply(pool, vendorId, correction, lang) };

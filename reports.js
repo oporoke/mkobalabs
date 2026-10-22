@@ -1,8 +1,9 @@
 // Evening summaries. Run by a systemd timer at 21:00 Tanzania time: `node reports.js`
 // Sunday: weekly summary; other days: today's summary. Only vendors who recorded something in the period.
-const { getSummaryRows, formatSummary } = require('./summary');
+const { getSummaryRows, buildSummary } = require('./summary');
 const { fmtTsh } = require('./format');
 const { t } = require('./i18n');
+const { balanceRows } = require('./debts');
 
 const TZ = 'Africa/Dar_es_Salaam';
 const TEMPLATE = process.env.REPORT_TEMPLATE || 'mkoba_muhtasari';
@@ -34,18 +35,18 @@ function totals(rows) {
 
 const displayName = (name, lang = 'sw') => (!name || /^\d+$/.test(name) ? t(lang).someone : name);
 
-async function sendReports(pool, wa) {
+async function sendReports(pool, wa, { forcePeriod } = {}) { // forcePeriod: tests only
   const { rows: [{ dow, today }] } = await pool.query(
     `SELECT extract(isodow FROM now() AT TIME ZONE '${TZ}')::int AS dow, (now() AT TIME ZONE '${TZ}')::date::text AS today`
   );
-  const period = dow === 7 ? 'wiki' : 'leo';
+  const period = forcePeriod || (dow === 7 ? 'wiki' : 'leo');
   const title = period === 'wiki' ? 'wiki hii' : 'leo';
 
   const { rows: vendors } = await pool.query(
     `SELECT v.id, v.phone_number, v.name, v.language,
             (SELECT max(created_at) FROM messages_log m WHERE m.vendor_id = v.id) > now() - interval '23 hours' AS in_window
        FROM vendors v
-      WHERE v.daily_report`
+      WHERE v.daily_report AND v.consent_at IS NOT NULL`
   );
 
   const result = { period, date: today, sent: 0, skipped: 0, failed: 0 };
@@ -64,7 +65,12 @@ async function sendReports(pool, wa) {
     let res;
     if (v.in_window) {
       const L = t(v.language);
-      res = await wa.sendText(v.phone_number, `${L.reportGreeting(displayName(v.name, v.language))}\n${formatSummary(period, rows, v.language)}\n\n${L.reportFooter}`);
+      let debts = '';
+      if (period === 'wiki') {
+        const owed = (await balanceRows(pool, v.id)).filter(r => Number(r.balance) > 0).slice(0, 5);
+        if (owed.length) debts = '\n\n' + L.weeklyDebts(owed.map(r => `- ${r.name} ${fmtTsh(r.balance)} (${L.daysOpen(Number(r.days))})`).join('\n'));
+      }
+      res = await wa.sendText(v.phone_number, `${L.reportGreeting(displayName(v.name, v.language))}\n${await buildSummary(pool, v.id, period, v.language)}${debts}\n\n${L.reportFooter}`);
     } else {
       const t = totals(rows);
       res = await wa.sendTemplate(v.phone_number, TEMPLATE, TEMPLATE_LANG,

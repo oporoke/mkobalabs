@@ -62,9 +62,15 @@ function balanceLine(name, balance, lang = 'sw') {
   return L.settled(name);
 }
 
+// Days since the last debt was added (either direction), for "how long has this been open".
+const LAST_CREDIT = `max(created_at) FILTER (WHERE type IN ('credit_given', 'credit_received'))`;
+const DAYS_OPEN = `floor(extract(epoch FROM now() - ${LAST_CREDIT}) / 86400)::int`;
+
 async function personBalance(pool, vendorId, name) {
   const { rows: [r] } = await pool.query(
-    `SELECT COALESCE(SUM(${SIGNED}), 0) AS balance, COUNT(*) AS n FROM transactions
+    `SELECT COALESCE(SUM(${SIGNED}), 0) AS balance, COUNT(*) AS n,
+            to_char(${LAST_CREDIT} AT TIME ZONE 'Africa/Dar_es_Salaam', 'DD/MM/YYYY') AS since
+       FROM transactions
       WHERE vendor_id = $1 AND ${LIVE} AND lower(counterparty) = lower($2)`,
     [vendorId, name]
   );
@@ -74,7 +80,7 @@ async function personBalance(pool, vendorId, name) {
 // Non-zero balances per person: [{ name, balance }] (positive = they owe the vendor)
 async function balanceRows(pool, vendorId) {
   const { rows } = await pool.query(
-    `SELECT min(counterparty) AS name, SUM(${SIGNED}) AS balance FROM transactions
+    `SELECT min(counterparty) AS name, SUM(${SIGNED}) AS balance, ${DAYS_OPEN} AS days FROM transactions
       WHERE vendor_id = $1 AND ${LIVE}
       GROUP BY lower(counterparty)
      HAVING SUM(${SIGNED}) <> 0
@@ -91,8 +97,9 @@ async function allBalances(pool, vendorId, lang = 'sw') {
   const owedToMe = rows.filter(r => Number(r.balance) > 0);
   const iOwe = rows.filter(r => Number(r.balance) < 0);
   const out = [L.debtsTitle];
-  if (owedToMe.length) out.push(L.owedToYou, ...owedToMe.map(r => `- ${r.name} ${fmtTsh(r.balance)}`));
-  if (iOwe.length) out.push(L.youOweHeading, ...iOwe.map(r => `- ${r.name} ${fmtTsh(-r.balance)}`));
+  const age = r => (r.days == null ? '' : ` (${L.daysOpen(Number(r.days))})`);
+  if (owedToMe.length) out.push(L.owedToYou, ...owedToMe.map(r => `- ${r.name} ${fmtTsh(r.balance)}${age(r)}`));
+  if (iOwe.length) out.push(L.youOweHeading, ...iOwe.map(r => `- ${r.name} ${fmtTsh(-r.balance)}${age(r)}`));
   return out.join('\n');
 }
 
@@ -105,7 +112,13 @@ async function debtReply(pool, vendorId, messageId, text, lang = 'sw') {
   if (q) {
     if (q.all) return allBalances(pool, vendorId, lang);
     const r = await personBalance(pool, vendorId, q.name);
-    return Number(r.n) ? balanceLine(q.name, r.balance, lang) + '.' : L.noRecordsFor(q.name);
+    if (!Number(r.n)) return L.noRecordsFor(q.name);
+    const line = balanceLine(q.name, r.balance, lang) + '.';
+    if (Number(r.balance) <= 0) return line;
+    // They owe the vendor: also send a ready-made reminder the vendor can forward to them (item: debt collection).
+    const { rows: [v] } = await pool.query('SELECT name FROM vendors WHERE id = $1', [vendorId]);
+    const from = v?.name && !/^\d+$/.test(v.name) ? v.name : null;
+    return [`${line}\n${L.forwardIntro(q.name)}`, L.debtReminder(q.name, from, fmtTsh(r.balance), r.since)];
   }
 
   const d = parseDebt(text);

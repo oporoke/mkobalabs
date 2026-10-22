@@ -216,6 +216,36 @@ for (const [sms, kind, amount, fee, name, ref] of mmCases) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  sms ${JSON.stringify(sms.slice(0, 34)).padEnd(38)} -> ${JSON.stringify(r)}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length;
+// Privacy: consent and deletion phrases
+const { parseConsent, parseDeletion } = require('./privacy');
+const priv = [
+  ['NAKUBALI', 'consent', true], ['i agree', 'consent', true], ['ndio', 'consent', true], ['habari', 'consent', false], ['nimeuza 5000', 'consent', false],
+  ['FUTA DATA', 'deletion', 'request'], ['delete my data', 'deletion', 'request'], ['futa kabisa', 'deletion', 'confirm'],
+  ['DELETE EVERYTHING', 'deletion', 'confirm'], ['futa', 'deletion', null], ['futa kabisa akaunti', 'deletion', null],
+];
+for (const [text, fn, expected] of priv) {
+  const r = fn === 'consent' ? parseConsent(text) : parseDeletion(text);
+  const ok = r === expected;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${fn} ${JSON.stringify(text).padEnd(33)} -> ${r}`);
+}
+// Statement commands and amount kinds (price memory relies on them)
+const { parseStatementCommand } = require('./statement');
+const st = [['taarifa ya biashara', 'create'], ['Statement', 'create'], ['ripoti ya mkopo', 'create'], ['FUNGA TAARIFA', 'revoke'],
+  ['futa taarifa', null], ['taarifa', null]];
+for (const [text, expected] of st) {
+  const r = parseStatementCommand(text);
+  const ok = r === expected;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  statement ${JSON.stringify(text).padEnd(32)} -> ${r}`);
+}
+const kinds = [['nimeuza soda 10', 'bare'], ['nimeuza chips tsh 50', 'money'], ['nimeuza 15k', 'money'], ['nimeuza elfu tano', 'money'], ['nimeuza', null]];
+for (const [text, expected] of kinds) {
+  const r = p(text).amountKind;
+  const ok = r === expected;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  amountKind ${JSON.stringify(text).padEnd(31)} -> ${r}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

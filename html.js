@@ -23,7 +23,8 @@ a{color:var(--ink)}
 .hero .label{font-size:1rem;color:var(--muted)}
 .hero .big{display:block;font-size:clamp(2.6rem,12vw,3.6rem);font-weight:750;line-height:1.05;letter-spacing:-.02em}
 .breakdown{margin:14px 0 0;padding:0;list-style:none}
-.breakdown li{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--rule)}
+.breakdown li{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--rule)}
+.breakdown li span:last-child{white-space:nowrap}
 .chart{display:block;width:100%;height:auto;margin-top:4px}
 .chart-note{font-size:.85rem;color:var(--muted);margin:4px 0 0}
 .daftari{list-style:none;margin:0;padding:0 0 0 18px;border-left:2px solid var(--margin)}
@@ -48,6 +49,18 @@ table.days td:first-child{white-space:nowrap}
 .stats div{background:#fff;border:1.5px solid var(--rule);border-radius:10px;padding:10px 12px}
 .stats b{display:block;font-size:1.4rem}
 .scroll{overflow-x:auto}
+.prose h2{margin-top:24px}
+.prose li{margin:4px 0}
+.foot{margin-top:40px;font-size:.85rem;color:var(--muted)}
+.muted{color:var(--muted);margin:0}
+.doc-title{font-size:1.4rem;margin:12px 0 14px}
+.facts-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(12rem,1fr));gap:8px 16px;margin:0 0 18px}
+.facts-list dt{font-size:.82rem;color:var(--muted)} .facts-list dd{margin:0;font-weight:600}
+.facts-list.small{margin-top:16px} .facts-list.small dd{font-weight:500}
+tfoot th{border-top:2px solid var(--ink)}
+table.statement td,table.statement th{white-space:nowrap}
+@media (max-width:480px){table.statement{font-size:.8rem} table.statement td,table.statement th{padding:8px 4px}}
+@media print{body{background:#fff} main{max-width:none} a{display:none}}
 .facts{color:var(--muted);margin:0 0 8px}
 .note{color:var(--muted);font-size:.85rem;margin:8px 0 0;max-width:60rem}
 .bar{width:22%;min-width:80px}

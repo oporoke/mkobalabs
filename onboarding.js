@@ -9,6 +9,7 @@ const { parseDebt, parseDebtQuery } = require('./debts');
 const { parseReportSetting } = require('./reports');
 const { parseDashboardRequest } = require('./dashboard');
 const { parseMobileMoney } = require('./mobilemoney');
+const { parseStatementCommand } = require('./statement');
 
 const WELCOME = t('sw').welcome; // kept for older callers; use t(lang).welcome
 const GREETINGS = new Set(['habari', 'mambo', 'hello', 'hi', 'hey', 'sasa', 'salama', 'poa', 'asante', 'shikamoo', 'vipi', 'niaje']);
@@ -20,7 +21,7 @@ const clean = t => String(t || '').toLowerCase().replace(/[^a-z\s'-]/g, ' ').rep
 // True if the text is something the bot should act on (entry, command, debt...), not an onboarding answer.
 function isActionable(text) {
   if (parseCommand(text) || parseCorrection(text) || parseConfirmation(text) || parseDebtQuery(text) || parseDebt(text)
-      || parseReportSetting(text) !== null || parseDashboardRequest(text) || parseLanguageSwitch(text) || parseMobileMoney(text)) return true;
+      || parseReportSetting(text) !== null || parseDashboardRequest(text) || parseLanguageSwitch(text) || parseMobileMoney(text) || parseStatementCommand(text)) return true;
   const entries = parseLedgerEntries(text);
   return entries.length > 0 && entries.every(e => e.confidence >= 0.6);
 }
@@ -47,7 +48,7 @@ async function getVendor(pool, phone) {
     `INSERT INTO vendors (phone_number, name, onboarded_via, onboarding_step)
      VALUES ($1, $1, 'whatsapp', 'ask_name')
      ON CONFLICT (phone_number) DO UPDATE SET phone_number = EXCLUDED.phone_number
-     RETURNING id, name, onboarding_step, language, (xmax = 0) AS created`,
+     RETURNING id, name, onboarding_step, language, consent_at, (xmax = 0) AS created`,
     [phone]
   );
   return v;

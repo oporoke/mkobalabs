@@ -8,6 +8,8 @@ const { processWebhook } = require('./webhook');
 const { secureHeaders, page } = require('./html');
 const dashboard = require('./dashboard');
 const admin = require('./admin');
+const { privacyPage } = require('./privacy-page');
+const statement = require('./statement');
 
 const state = { inFlight: 0, shuttingDown: false }; // read by index.js during shutdown
 
@@ -68,9 +70,14 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+// Public privacy notice (item 40)
+app.get('/faragha', secureHeaders, privacyPage('sw'));
+app.get('/privacy', secureHeaders, privacyPage('en'));
+
 // Web pages: vendor dashboard and admin.
 app.use('/d', secureHeaders, dashboard.router);
 app.use('/admin', secureHeaders, admin.router);
+app.use('/s', secureHeaders, statement.router); // business statements shared with lenders
 
 // Errors from web pages: log, show a plain error page (no internal details).
 app.use((err, req, res, _next) => {
