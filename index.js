@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { debtReply } = require('./debts');
+const { getVendor, onboardingReply, isActionable, WELCOME } = require('./onboarding');
 const crypto = require('crypto');
 process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
 
@@ -84,16 +85,16 @@ async function sendWhatsAppMessage(to, body) {
   }
 }
 
-async function getOrCreateVendor(phone) {
-  const { rows } = await pool.query(
-    `INSERT INTO vendors (phone_number, name, onboarded_via)
-     VALUES ($1, $1, 'whatsapp')
-     ON CONFLICT (phone_number) DO UPDATE SET phone_number = EXCLUDED.phone_number
-     RETURNING id`,
-    [phone]
-  );
-  return rows[0].id;
-}
+// async function getOrCreateVendor(phone) {
+//   const { rows } = await pool.query(
+//     `INSERT INTO vendors (phone_number, name, onboarded_via)
+//      VALUES ($1, $1, 'whatsapp')
+//      ON CONFLICT (phone_number) DO UPDATE SET phone_number = EXCLUDED.phone_number
+//      RETURNING id`,
+//     [phone]
+//   );
+//   return rows[0].id;
+// }
 
 app.get("/", async (req, res) => {
   res.send("Mkoba API is running");
@@ -123,7 +124,8 @@ app.post('/webhook', async (req, res) => {
     if (!msg) return;
 
     const phone = msg.from;
-    const vendorId = await getOrCreateVendor(phone);
+    const vendor = await getVendor(pool, phone);
+    const vendorId = vendor.id;
 
     const logged = await pool.query(
       `INSERT INTO messages_log (wa_message_id, vendor_id, phone_number, channel, direction, raw_payload)
@@ -136,6 +138,7 @@ app.post('/webhook', async (req, res) => {
       console.log('Duplicate message ignored:', msg.id);
       return;
     }
+    if (vendor.created) await sendWhatsAppMessage(phone, WELCOME);
 
     if (msg.type !== 'text') {
       if (msg.type === 'audio') {
@@ -147,6 +150,12 @@ app.post('/webhook', async (req, res) => {
     }
 
     const text = msg.text.body;
+    const onboarding = await onboardingReply(pool, vendor, text);
+    if (onboarding) {
+      await sendWhatsAppMessage(phone, onboarding);
+      return;
+    }
+    if (vendor.created && !isActionable(text)) return; // e.g. "habari": the welcome is the reply
     const command = parseCommand(text);
     if (command) {
       await sendWhatsAppMessage(phone, await commandReply(pool, vendorId, command));

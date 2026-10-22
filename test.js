@@ -129,6 +129,24 @@ for (const [text, expected] of dq) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  debt query ${JSON.stringify(text).padEnd(31)} -> ${JSON.stringify(r)}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length;
+// Onboarding answers
+const { extractName, extractBusiness } = require('./onboarding');
+const names = [['Juma', 'Juma'], ['juma hassan', 'Juma Hassan'], ['Jina langu ni Asha', 'Asha'], ['naitwa mama neema', 'Mama Neema'],
+  ['habari', null], ['nimeuza 5000', null], ['leo', null], ['ndio', null], ['Juma 2', null], ['futa', null]];
+for (const [text, expected] of names) {
+  const r = extractName(text);
+  const ok = r === expected;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  name ${JSON.stringify(text).padEnd(37)} -> ${r}`);
+}
+const biz = [['chakula', 'chakula'], ['nauza mboga', 'mboga'], ['duka la nguo', 'nguo'], ['mama lishe', 'mama lishe'],
+  ['nimeuza 5000', null], ['salio', null], ['habari', null]];
+for (const [text, expected] of biz) {
+  const r = extractBusiness(text);
+  const ok = r === expected;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  business ${JSON.stringify(text).padEnd(33)} -> ${r}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);
