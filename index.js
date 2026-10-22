@@ -4,7 +4,7 @@ const express = require('express');
 
 const log = require('./log');
 const pool = require('./db');
-const { sendText } = require('./whatsapp');
+const { sendText, sendHealth } = require('./whatsapp');
 const { getVendor, onboardingReply, isActionable, WELCOME } = require('./onboarding');
 const { parseCommand, commandReply } = require('./summary');
 const { reportSettingReply } = require('./reports');
@@ -34,10 +34,12 @@ app.get('/health', async (_req, res) => {
   const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('db timeout')), 3000));
   try {
     await Promise.race([pool.query('SELECT 1'), timeout]);
+    const wa = sendHealth();
+    if (!wa.ok) return res.status(503).set('Cache-Control', 'no-store').json({ status: 'error', reason: `whatsapp_${wa.reason}`, code: wa.code });
     res.set('Cache-Control', 'no-store').json({ status: 'ok', uptime_s: Math.round(process.uptime()) });
   } catch (err) {
     log.error('health_check_failed', { error: err.message });
-    res.status(503).set('Cache-Control', 'no-store').json({ status: 'error' });
+    res.status(503).set('Cache-Control', 'no-store').json({ status: 'error', reason: 'database' });
   }
 });
 
