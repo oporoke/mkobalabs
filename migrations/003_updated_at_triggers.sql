@@ -18,4 +18,3 @@ CREATE OR REPLACE TRIGGER vendors_set_updated_at
   BEFORE UPDATE ON vendors
   FOR EACH ROW WHEN (OLD.* IS DISTINCT FROM NEW.*)
   EXECUTE FUNCTION set_updated_at();
-  

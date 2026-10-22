@@ -55,4 +55,3 @@ const readSql = file => fs.readFileSync(path.join(DIR, file), 'utf8')
 })()
   .catch(err => { console.error(err.message); process.exitCode = 1; })
   .finally(() => pool.end());
-  

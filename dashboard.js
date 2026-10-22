@@ -200,7 +200,8 @@ router.get('/', async (req, res, next) => {
       <h2>Siku 14 zilizopita</h2>${chartSvg(days)}
       <p class="chart-note">Kijani ni faida, nyekundu ni hasara.</p>
       <h2>Rekodi za karibuni</h2>${entries}
-      <h2>Madeni</h2>${debtHtml}`));
+      <h2>Madeni</h2>${debtHtml}
+      <p class="foot"><a href="/faragha">Faragha na taarifa zako</a></p>`));
   } catch (err) { next(err); }
 });
 
