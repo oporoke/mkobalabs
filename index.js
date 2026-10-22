@@ -29,6 +29,18 @@ function validSignature(req) {
 
 app.get('/', (_req, res) => res.send('Mkoba API is running'));
 
+// Health check for uptime monitoring: 200 if the app and database answer, 503 otherwise.
+app.get('/health', async (_req, res) => {
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('db timeout')), 3000));
+  try {
+    await Promise.race([pool.query('SELECT 1'), timeout]);
+    res.set('Cache-Control', 'no-store').json({ status: 'ok', uptime_s: Math.round(process.uptime()) });
+  } catch (err) {
+    log.error('health_check_failed', { error: err.message });
+    res.status(503).set('Cache-Control', 'no-store').json({ status: 'error' });
+  }
+});
+
 // Meta's one-time webhook verification handshake
 app.get('/webhook', (req, res) => {
   if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === process.env.WEBHOOK_VERIFY_TOKEN) {
