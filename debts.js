@@ -6,6 +6,7 @@
 //   repayment_made     I paid them      (+)   "nimemlipa Juma 2000", "nimelipa deni la Juma 2000"
 const { parseLedgerEntry } = require('./parser');
 const { fmtTsh } = require('./format');
+const { t } = require('./i18n');
 
 const PREFIX = '(?:mama|baba|bi|bw|bwana|kaka|dada|mzee|ndugu|shangazi|mjomba|mr|mrs)';
 const NAME = `(${PREFIX}\\s+[a-z]+|[a-z]+)`;
@@ -54,11 +55,11 @@ const SIGNED = `CASE type WHEN 'credit_given' THEN amount_tsh WHEN 'repayment_ma
                          WHEN 'credit_received' THEN -amount_tsh WHEN 'repayment_received' THEN -amount_tsh END`;
 const LIVE = `deleted_at IS NULL AND status = 'confirmed' AND counterparty IS NOT NULL`;
 
-function balanceLine(name, balance) {
-  const b = Number(balance);
-  if (b > 0) return `${name} anadaiwa ${fmtTsh(b)}`;
-  if (b < 0) return `Unadaiwa na ${name} ${fmtTsh(-b)}`;
-  return `Hakuna deni kati yako na ${name}`;
+function balanceLine(name, balance, lang = 'sw') {
+  const b = Number(balance), L = t(lang);
+  if (b > 0) return L.owesYou(name, fmtTsh(b));
+  if (b < 0) return L.youOwe(name, fmtTsh(-b));
+  return L.settled(name);
 }
 
 async function personBalance(pool, vendorId, name) {
@@ -83,36 +84,33 @@ async function balanceRows(pool, vendorId) {
   return rows;
 }
 
-async function allBalances(pool, vendorId) {
+async function allBalances(pool, vendorId, lang = 'sw') {
+  const L = t(lang);
   const rows = await balanceRows(pool, vendorId);
-  if (!rows.length) return 'Hakuna madeni.';
+  if (!rows.length) return L.noDebts;
   const owedToMe = rows.filter(r => Number(r.balance) > 0);
   const iOwe = rows.filter(r => Number(r.balance) < 0);
-  const out = ['📒 Madeni:'];
-  if (owedToMe.length) out.push('Unaowadai:', ...owedToMe.map(r => `- ${r.name} ${fmtTsh(r.balance)}`));
-  if (iOwe.length) out.push('Wanaokudai:', ...iOwe.map(r => `- ${r.name} ${fmtTsh(-r.balance)}`));
+  const out = [L.debtsTitle];
+  if (owedToMe.length) out.push(L.owedToYou, ...owedToMe.map(r => `- ${r.name} ${fmtTsh(r.balance)}`));
+  if (iOwe.length) out.push(L.youOweHeading, ...iOwe.map(r => `- ${r.name} ${fmtTsh(-r.balance)}`));
   return out.join('\n');
 }
 
-const ACTION = {
-  credit_given: (n, a) => `${n} anadaiwa ${a}`,
-  credit_received: (n, a) => `Unadaiwa na ${n} ${a}`,
-  repayment_received: (n, a) => `${n} amelipa ${a}`,
-  repayment_made: (n, a) => `Umemlipa ${n} ${a}`,
-};
+const ACTION = t('sw').debtAction; // kept for older callers
 
 // Returns a reply if the text is about debts; null otherwise (caller continues).
-async function debtReply(pool, vendorId, messageId, text) {
+async function debtReply(pool, vendorId, messageId, text, lang = 'sw') {
+  const L = t(lang);
   const q = parseDebtQuery(text);
   if (q) {
-    if (q.all) return allBalances(pool, vendorId);
+    if (q.all) return allBalances(pool, vendorId, lang);
     const r = await personBalance(pool, vendorId, q.name);
-    return Number(r.n) ? balanceLine(q.name, r.balance) + '.' : `Hakuna rekodi za ${q.name}.`;
+    return Number(r.n) ? balanceLine(q.name, r.balance, lang) + '.' : L.noRecordsFor(q.name);
   }
 
   const d = parseDebt(text);
   if (!d) return null;
-  if (!d.amount) return `Kiasi gani? Mfano: ${String(text).trim()} 5000`;
+  if (!d.amount) return L.askDebtAmount(String(text).trim());
 
   await pool.query(
     `INSERT INTO transactions (vendor_id, message_id, type, direction, amount_tsh, raw_input, channel, parse_confidence, status, counterparty)
@@ -120,7 +118,7 @@ async function debtReply(pool, vendorId, messageId, text) {
     [vendorId, messageId, d.type, d.amount, text, d.name]
   );
   const r = await personBalance(pool, vendorId, d.name);
-  return `Sawa! ${ACTION[d.type](d.name, fmtTsh(d.amount))}.\nSalio: ${balanceLine(d.name, r.balance)}.`;
+  return L.debtSaved(L.debtAction[d.type](d.name, fmtTsh(d.amount)), balanceLine(d.name, r.balance, lang));
 }
 
 module.exports = { parseDebt, parseDebtQuery, debtReply, balanceRows, ACTION };

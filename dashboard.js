@@ -7,6 +7,7 @@ const { esc, page } = require('./html');
 const { fmtTsh, describe } = require('./format');
 const { getSummaryRows } = require('./summary');
 const { balanceRows } = require('./debts');
+const { t } = require('./i18n');
 
 const TZ = 'Africa/Dar_es_Salaam';
 const LINK_MINUTES = 15;
@@ -22,14 +23,14 @@ function parseDashboardRequest(text) {
   return REQUESTS.has(String(text || '').toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim());
 }
 
-async function dashboardLinkReply(pool, vendorId) {
+async function dashboardLinkReply(pool, vendorId, lang = 'sw') {
   const token = newToken();
   await pool.query(
     `INSERT INTO login_tokens (token_hash, vendor_id, expires_at) VALUES ($1, $2, now() + interval '${LINK_MINUTES} minutes')`,
     [hash(token), vendorId]
   );
   const base = process.env.PUBLIC_URL || 'https://mkoba.digital';
-  return `Fungua dashibodi yako hapa (kiungo kinafanya kazi kwa dakika ${LINK_MINUTES}, mara moja tu):\n${base}/d/login?t=${token}`;
+  return t(lang).dashboardLink(LINK_MINUTES, `${base}/d/login?t=${token}`);
 }
 
 // --- web side ---

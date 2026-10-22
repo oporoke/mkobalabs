@@ -20,39 +20,30 @@ const ALIASES = {
 };
 const LOOKUP = Object.fromEntries(Object.entries(ALIASES).flatMap(([cmd, words]) => words.map(w => [w, cmd])));
 
-const HELP = [
-  'Mkoba - jinsi ya kutumia:',
-  '• Rekodi: nimeuza 5000, nimenunua unga 20000, nimelipa nauli 2000',
-  '• Muhtasari: leo, jana, wiki, mwezi, salio',
-  '• Madeni: Juma ananidai 5000, namdai Juma 5000, Juma amelipa 2000, nimemlipa Juma 2000',
-  '• Kuona madeni: madeni, au deni Juma',
-  '• Ripoti ya jioni: ACHA RIPOTI / ANZA RIPOTI',
-  '• Dashibodi ya mtandaoni: dashibodi',
-  '• Kufuta rekodi ya mwisho: futa',
-  '• Kubadilisha kiasi cha mwisho: rekebisha 6000',
-  '• Msaada: msaada',
-].join('\n');
+const { t } = require('./i18n');
+const HELP = t('sw').help; // kept for older callers
 
 function parseCommand(text) {
-  const t = String(text || '').toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  return LOOKUP[t] || null;
+  const s = String(text || '').toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return LOOKUP[s] || null;
 }
 
 const { fmtTsh } = require('./format');
 
-function formatSummary(period, rows) {
-  const { title } = PERIODS[period];
-  if (!rows.length) return period === 'salio' ? 'Hakuna rekodi bado.' : `Hakuna rekodi za ${title} bado.`;
+function formatSummary(period, rows, lang = 'sw') {
+  const L = t(lang);
+  const title = L.periods[period];
+  if (!rows.length) return period === 'salio' ? L.noRecords : L.noRecordsPeriod(title);
   const by = Object.fromEntries(rows.map(r => [r.type, { total: Number(r.total), n: Number(r.n) }]));
-  const get = t => by[t] || { total: 0, n: 0 };
+  const get = type => by[type] || { total: 0, n: 0 };
   const sale = get('sale'), purchase = get('purchase'), expense = get('expense');
   const net = sale.total - purchase.total - expense.total;
   return [
-    `📊 Muhtasari wa ${title}:`,
-    `Mauzo: ${fmtTsh(sale.total)} (${sale.n})`,
-    `Manunuzi: ${fmtTsh(purchase.total)} (${purchase.n})`,
-    `Matumizi: ${fmtTsh(expense.total)} (${expense.n})`,
-    net >= 0 ? `Faida: ${fmtTsh(net)}` : `Hasara: ${fmtTsh(-net)}`,
+    L.summaryTitle(title),
+    `${L.sales}: ${fmtTsh(sale.total)} (${sale.n})`,
+    `${L.purchases}: ${fmtTsh(purchase.total)} (${purchase.n})`,
+    `${L.expenses}: ${fmtTsh(expense.total)} (${expense.n})`,
+    net >= 0 ? `${L.profit}: ${fmtTsh(net)}` : `${L.loss}: ${fmtTsh(-net)}`,
   ].join('\n');
 }
 
@@ -72,9 +63,9 @@ async function getSummaryRows(pool, vendorId, period) {
   return rows;
 }
 
-async function commandReply(pool, vendorId, command) {
-  if (command === 'msaada') return HELP;
-  return formatSummary(command, await getSummaryRows(pool, vendorId, command));
+async function commandReply(pool, vendorId, command, lang = 'sw') {
+  if (command === 'msaada') return t(lang).help;
+  return formatSummary(command, await getSummaryRows(pool, vendorId, command), lang);
 }
 
 module.exports = { parseCommand, formatSummary, getSummaryRows, commandReply, HELP };

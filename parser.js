@@ -17,7 +17,10 @@ const MULTS = { mia: { v: 100, rank: 1 }, elfu: { v: 1000, rank: 2 }, laki: { v:
   buku: { v: 1000, rank: 2 }, ngiri: { v: 1000, rank: 2 }, thao: { v: 1000, rank: 2 }, jero: { v: 500, rank: 1 } };
 
 // Spelling variants of number words
-const VARIANTS = { elf: 'elfu', elfuu: 'elfu', milion: 'milioni', million: 'milioni', laaki: 'laki' };
+const VARIANTS = { elf: 'elfu', elfuu: 'elfu', milion: 'milioni', million: 'milioni', laaki: 'laki',
+  // passive verb forms: the vendor is the one paid / sent money / sold to
+  nimelipwa: 'nimepokea', nililipwa: 'nimepokea', nimetumiwa: 'nimepokea', nilitumiwa: 'nimepokea',
+  nimeuziwa: 'nimenunua', niliuziwa: 'nimenunua' };
 
 // Typo tolerance for verbs: "nmeuza", "nimeuuza", "nimeuxa", "nimenunu" -> canonical form.
 const CANON_VERBS = ['nimeuza', 'niliuza', 'tumeuza', 'tuliuza', 'nimeuzia', 'nauza', 'mauzo',
@@ -27,7 +30,9 @@ const CANON_VERBS = ['nimeuza', 'niliuza', 'tumeuza', 'tuliuza', 'nimeuzia', 'na
 // Real words that are close to a verb but mean something else; never "correct" these.
 const REAL_WORDS = new Set(['nimeona', 'nimeuma', 'nimelima', 'nimepita', 'nimelala', 'nimekula', 'nimefika', 'nimeamka',
   'nimechoka', 'nimeoga', 'nimeenda', 'nimekuja', 'nimeuliza', 'niliuliza', 'nimesema', 'nimeanza', 'nimepata', 'nimepokea',
-  'nimetuma', 'nimelia', 'nililia', 'nimekaa', 'mauaji', 'gharika', 'spend', 'expensive']);
+  'nimetuma', 'nimelia', 'nililia', 'nimekaa', 'mauaji', 'gharika', 'spend', 'expensive',
+  'nimepika', 'nilipika', 'nimepiga', 'nilipiga', 'nimeua', 'nimeleta', 'nimelewa', 'nimefunga', 'nimefungua', 'nimenuna',
+  'nimeuguza', 'nimelinda', 'nimetumwa', 'nimekopa', 'nilikopa']);
 
 // Optimal string alignment distance (Levenshtein + adjacent transpositions)
 function editDistance(a, b) {

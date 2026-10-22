@@ -170,6 +170,10 @@ const typos = [
   ['nimeuza buku tano', 'sale', 5000], ['nimeuza buku 5', 'sale', 5000], ['nimeuza buku mbili jero', 'sale', 2500],
   ['nimeuza jero', 'sale', 500], ['nimelipa ngiri 3', 'expense', 3000], ['nimeuza elf 10', 'sale', 10000],
   ['nimeona 5000', 'unknown', 5000], ['nimelima 5000', 'unknown', 5000], ['nimepita 5000', 'unknown', 5000],
+  ['nimepika wali 5000', 'unknown', 5000], ['nimepiga hela 5000', 'unknown', 5000], ['nimekopa 5000', 'unknown', 5000],
+  ['nimeleta mzigo 3000', 'unknown', 3000], ['nimefunga duka 2000', 'unknown', 2000],
+  ['nimelipwa 5000', 'sale', 5000], ['nimetumiwa 20000', 'sale', 20000], ['nimeuziwa mchele 25000', 'purchase', 25000],
+  ['nimelipia umeme 15000', 'expense', 15000],
 ];
 for (const [text, type, amount] of typos) {
   const r = p(text);

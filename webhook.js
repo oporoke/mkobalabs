@@ -2,7 +2,8 @@
 const log = require('./log');
 const pool = require('./db');
 const { sendText } = require('./whatsapp');
-const { getVendor, onboardingReply, isActionable, WELCOME } = require('./onboarding');
+const { getVendor, onboardingReply, isActionable } = require('./onboarding');
+const { t, detectLanguage, parseLanguageSwitch } = require('./i18n');
 const { parseCommand, commandReply } = require('./summary');
 const { reportSettingReply } = require('./reports');
 const { parseCorrection, correctionReply } = require('./corrections');
@@ -10,12 +11,7 @@ const { recordEntries, confirmationReply } = require('./ledger');
 const { debtReply } = require('./debts');
 const { parseDashboardRequest, dashboardLinkReply } = require('./dashboard');
 
-const NON_TEXT_HINTS = {
-  audio: 'Samahani, bado siwezi kusikiliza ujumbe wa sauti. Tafadhali andika, mfano: nimeuza 5000',
-  other: 'Samahani, ninaelewa ujumbe wa maandishi tu. Andika, mfano: nimeuza 5000 au nimenunua unga 20000',
-};
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
-const SYSTEM_ERROR = 'Samahani, kuna tatizo la mfumo. Tafadhali tuma tena baada ya muda mfupi.';
 
 // Handle one webhook body (already signature-checked and acknowledged).
 async function processWebhook(body) {
@@ -36,7 +32,7 @@ async function processWebhook(body) {
   if (status) return logDeliveryStatus(status);
   if (!msg) return;
 
-  let vendorId;
+  let vendorId, lang = 'sw';
   try {
     const phone = msg.from;
     const vendor = await getVendor(pool, phone);
@@ -49,53 +45,64 @@ async function processWebhook(body) {
     }
     log.info('message_received', { id: msg.id, type: msg.type, vendor: vendorId, from: log.mask(phone), new_vendor: vendor.created });
 
-    const done = handler => log.info('message_handled', { id: msg.id, vendor: vendorId, handler, ms: Date.now() - started });
+    const done = handler => log.info('message_handled', { id: msg.id, vendor: vendorId, handler, lang, ms: Date.now() - started });
     const respond = async (handler, reply) => { await sendText(phone, reply); done(handler); };
 
-    if (vendor.created) await sendText(phone, WELCOME);
+    // Language (item 37): explicit "english"/"kiswahili", else switch only on a clearly one-language message.
+    const text = msg.type === 'text' ? msg.text?.body : null;
+    const switchTo = text ? parseLanguageSwitch(text) : null;
+    lang = vendor.language || 'sw';
+    const wanted = switchTo || (text ? detectLanguage(text) : null);
+    if (wanted && wanted !== lang) {
+      await pool.query('UPDATE vendors SET language = $2 WHERE id = $1', [vendorId, wanted]);
+      lang = wanted;
+    }
+    const L = t(lang);
+
+    if (vendor.created) await sendText(phone, L.welcome);
 
     if (msg.type !== 'text') {
-      if (msg.type === 'audio') return respond('non_text', NON_TEXT_HINTS.audio);
-      if (HINT_TYPES.includes(msg.type)) return respond('non_text', NON_TEXT_HINTS.other);
+      if (msg.type === 'audio') return respond('non_text', L.audioHint);
+      if (HINT_TYPES.includes(msg.type)) return respond('non_text', L.textOnlyHint);
       return done('ignored'); // reactions and other types: logged, no reply
     }
+    if (switchTo) return respond('language', L.languageSet);
 
-    const text = msg.text.body;
-    const route = await routeText({ vendor, vendorId, messageId, text });
+    const route = await routeText({ vendor, vendorId, messageId, text: msg.text.body, lang });
     if (route) return respond(route.handler, route.reply);
     return done('welcome');
   } catch (err) {
     log.error('message_failed', { id: msg.id, vendor: vendorId, error: err.message, stack: err.stack });
-    if (msg.from) await sendText(msg.from, SYSTEM_ERROR);
+    if (msg.from) await sendText(msg.from, t(lang).systemError);
   }
 }
 
 // Decide which handler answers a text message. Order matters: earlier handlers win.
 // Returns { handler, reply }, or null when no reply should be sent.
-async function routeText({ vendor, vendorId, messageId, text }) {
-  const onboarding = await onboardingReply(pool, vendor, text);
+async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
+  const onboarding = await onboardingReply(pool, vendor, text, lang);
   if (onboarding) return { handler: 'onboarding', reply: onboarding };
   if (vendor.created && !isActionable(text)) return null; // e.g. "habari": the welcome is the reply
 
   const command = parseCommand(text);
-  if (command) return { handler: `command:${command}`, reply: await commandReply(pool, vendorId, command) };
+  if (command) return { handler: `command:${command}`, reply: await commandReply(pool, vendorId, command, lang) };
 
-  const reportSetting = await reportSettingReply(pool, vendorId, text);
+  const reportSetting = await reportSettingReply(pool, vendorId, text, lang);
   if (reportSetting) return { handler: 'report_setting', reply: reportSetting };
 
-  if (parseDashboardRequest(text)) return { handler: 'dashboard_link', reply: await dashboardLinkReply(pool, vendorId) };
+  if (parseDashboardRequest(text)) return { handler: 'dashboard_link', reply: await dashboardLinkReply(pool, vendorId, lang) };
 
   const correction = parseCorrection(text);
-  if (correction) return { handler: `correction:${correction.action}`, reply: await correctionReply(pool, vendorId, correction) };
+  if (correction) return { handler: `correction:${correction.action}`, reply: await correctionReply(pool, vendorId, correction, lang) };
 
-  const confirmation = await confirmationReply(pool, vendorId, text);
+  const confirmation = await confirmationReply(pool, vendorId, text, lang);
   if (confirmation) return { handler: 'confirmation', reply: confirmation };
 
   // Debts before the ledger: "Juma amelipa 2000" must not be read as an expense.
-  const debt = await debtReply(pool, vendorId, messageId, text);
+  const debt = await debtReply(pool, vendorId, messageId, text, lang);
   if (debt) return { handler: 'debt', reply: debt };
 
-  return { handler: 'ledger', reply: await recordEntries(pool, vendorId, messageId, text) };
+  return { handler: 'ledger', reply: await recordEntries(pool, vendorId, messageId, text, lang) };
 }
 
 // Store the raw message once; returns its messages_log id, or null if it was a duplicate.

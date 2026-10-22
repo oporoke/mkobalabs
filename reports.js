@@ -2,11 +2,11 @@
 // Sunday: weekly summary; other days: today's summary. Only vendors who recorded something in the period.
 const { getSummaryRows, formatSummary } = require('./summary');
 const { fmtTsh } = require('./format');
+const { t } = require('./i18n');
 
 const TZ = 'Africa/Dar_es_Salaam';
 const TEMPLATE = process.env.REPORT_TEMPLATE || 'mkoba_muhtasari';
 const TEMPLATE_LANG = process.env.REPORT_TEMPLATE_LANG || 'sw';
-const FOOTER = 'Kusitisha ripoti hizi, andika ACHA RIPOTI.';
 
 // --- vendor commands: "acha ripoti" / "anza ripoti" ---
 const STOP = new Set(['acha ripoti', 'sitisha ripoti', 'zima ripoti', 'stop ripoti', 'stop reports']);
@@ -17,13 +17,11 @@ function parseReportSetting(text) {
   return STOP.has(t) ? false : START.has(t) ? true : null;
 }
 
-async function reportSettingReply(pool, vendorId, text) {
+async function reportSettingReply(pool, vendorId, text, lang = 'sw') {
   const on = parseReportSetting(text);
   if (on === null) return null;
   await pool.query(`UPDATE vendors SET daily_report = $2 WHERE id = $1`, [vendorId, on]);
-  return on
-    ? 'Sawa! Utapokea muhtasari kila jioni saa 3 usiku.'
-    : 'Sawa, nimesitisha ripoti za jioni. Kuwasha tena, andika ANZA RIPOTI.';
+  return on ? t(lang).reportsOn : t(lang).reportsOff;
 }
 
 // --- sending ---
@@ -34,7 +32,7 @@ function totals(rows) {
   return { sale, purchase, expense, netLine: net >= 0 ? `Faida: ${fmtTsh(net)}` : `Hasara: ${fmtTsh(-net)}` };
 }
 
-const displayName = name => (!name || /^\d+$/.test(name) ? 'mfanyabiashara' : name);
+const displayName = (name, lang = 'sw') => (!name || /^\d+$/.test(name) ? t(lang).someone : name);
 
 async function sendReports(pool, wa) {
   const { rows: [{ dow, today }] } = await pool.query(
@@ -44,7 +42,7 @@ async function sendReports(pool, wa) {
   const title = period === 'wiki' ? 'wiki hii' : 'leo';
 
   const { rows: vendors } = await pool.query(
-    `SELECT v.id, v.phone_number, v.name,
+    `SELECT v.id, v.phone_number, v.name, v.language,
             (SELECT max(created_at) FROM messages_log m WHERE m.vendor_id = v.id) > now() - interval '23 hours' AS in_window
        FROM vendors v
       WHERE v.daily_report`
@@ -65,7 +63,8 @@ async function sendReports(pool, wa) {
 
     let res;
     if (v.in_window) {
-      res = await wa.sendText(v.phone_number, `Habari ${displayName(v.name)}!\n${formatSummary(period, rows)}\n\n${FOOTER}`);
+      const L = t(v.language);
+      res = await wa.sendText(v.phone_number, `${L.reportGreeting(displayName(v.name, v.language))}\n${formatSummary(period, rows, v.language)}\n\n${L.reportFooter}`);
     } else {
       const t = totals(rows);
       res = await wa.sendTemplate(v.phone_number, TEMPLATE, TEMPLATE_LANG,

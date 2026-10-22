@@ -2,6 +2,7 @@
 const { parseLedgerEntries } = require('./parser');
 const { savedMessage, listLines } = require('./format');
 const { logFeedback } = require('./feedback');
+const { t } = require('./i18n');
 
 const SAVE_MIN = 0.6;      // below this: not understood, ask to resend
 const CONFIRM_BELOW = 0.8; // between SAVE_MIN and this: ask the vendor to confirm
@@ -15,14 +16,14 @@ function parseConfirmation(text) {
   return YES.has(t) ? 'yes' : NO.has(t) ? 'no' : null;
 }
 
-async function recordEntries(pool, vendorId, messageId, text) {
+async function recordEntries(pool, vendorId, messageId, text, lang = 'sw') {
   const entries = parseLedgerEntries(text);
   const unclear = entries.filter(e => e.confidence < SAVE_MIN);
   if (entries.length === 0 || unclear.length) {
     await logFeedback(pool, { vendorId, messageId, text, reason: 'not_understood',
       detail: entries.map(e => ({ text: e.text, type: e.type, amount: e.amount, confidence: e.confidence })) });
     const what = unclear.length && entries.length > 1 ? ` "${unclear[0].text}"` : '';
-    return `Samahani, sikuelewa vizuri${what}. Ulitumia/uliuza kiasi gani, TSh ngapi?`;
+    return t(lang).notUnderstood(what);
   }
 
   const status = entries.some(e => e.confidence < CONFIRM_BELOW) ? 'pending' : 'confirmed';
@@ -51,13 +52,13 @@ async function recordEntries(pool, vendorId, messageId, text) {
   }
 
   if (status === 'pending') {
-    return `Nimeelewa hivi:\n${listLines(entries)}\nNi sahihi? Jibu NDIO au HAPANA.`;
+    return t(lang).pending(listLines(entries, lang));
   }
-  return savedMessage(entries);
+  return savedMessage(entries, lang);
 }
 
 // Returns a reply if the text answers a pending question; null otherwise (caller continues).
-async function confirmationReply(pool, vendorId, text) {
+async function confirmationReply(pool, vendorId, text, lang = 'sw') {
   const answer = parseConfirmation(text);
   if (!answer) return null;
 
@@ -77,7 +78,7 @@ async function confirmationReply(pool, vendorId, text) {
         RETURNING type, amount_tsh, item, quantity, unit`,
       [vendorId, latest.message_id]
     );
-    return savedMessage(rows.map(r => ({ ...r, amount: r.amount_tsh })));
+    return savedMessage(rows.map(r => ({ ...r, amount: r.amount_tsh })), lang);
   }
 
   const { rows: rejected } = await pool.query(
@@ -88,7 +89,7 @@ async function confirmationReply(pool, vendorId, text) {
   );
   await logFeedback(pool, { vendorId, messageId: latest.message_id, text: rejected.map(r => r.raw_input).join('\n'),
     reason: 'rejected', detail: rejected.map(r => ({ type: r.type, amount: Number(r.amount_tsh) })) });
-  return 'Sawa, sijahifadhi. Tafadhali tuma tena kwa usahihi, mfano: nimenunua mchele 25000';
+  return t(lang).rejected;
 }
 
 module.exports = { recordEntries, confirmationReply, parseConfirmation };

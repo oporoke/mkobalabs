@@ -2,6 +2,7 @@
 const { parseLedgerEntry } = require('./parser');
 const { fmtTsh, describe } = require('./format');
 const { logFeedback } = require('./feedback');
+const { t } = require('./i18n');
 
 const UNDO = new Set(['futa', 'futa ya mwisho', 'futa hiyo', 'ondoa', 'undo', 'delete']);
 const CORRECT_RE = /^\s*(rekebisha|badilisha|sahihisha|correct|edit)\b(.*)$/i;
@@ -34,24 +35,23 @@ async function lastGroup(db, vendorId) {
   return rows;
 }
 
-async function correctionReply(pool, vendorId, cmd) {
+async function correctionReply(pool, vendorId, cmd, lang = 'sw') {
+  const L = t(lang);
   const group = await lastGroup(pool, vendorId);
-  if (!group.length) return 'Hakuna rekodi ya kubadilisha.';
+  if (!group.length) return L.nothingToChange;
 
   if (cmd.action === 'undo') {
     await pool.query(
       `UPDATE transactions SET deleted_at = now() WHERE id = ANY($1::bigint[]) AND deleted_at IS NULL`,
       [group.map(r => r.id)]
     );
-    if (group.length === 1) return `Nimefuta ${describe(group[0])} ${fmtTsh(group[0].amount_tsh)}.`;
-    return 'Nimefuta:\n' + group.map(r => `- ${describe(r, true)} ${fmtTsh(r.amount_tsh)}`).join('\n');
+    if (group.length === 1) return L.deletedOne(describe(group[0], false, lang), fmtTsh(group[0].amount_tsh));
+    return L.deletedMany(group.map(r => `- ${describe(r, true, lang)} ${fmtTsh(r.amount_tsh)}`).join('\n'));
   }
 
   // correct
-  if (!cmd.amount) return 'Andika kiasi kipya, mfano: rekebisha 6000';
-  if (group.length > 1) {
-    return `Ujumbe wako wa mwisho ulikuwa na rekodi ${group.length}. Andika "futa" kisha utume tena kwa usahihi.`;
-  }
+  if (!cmd.amount) return L.askNewAmount;
+  if (group.length > 1) return L.groupTooBig(group.length);
   const [r] = group;
   await pool.query(
     `UPDATE transactions SET amount_tsh = $2, updated_at = now() WHERE id = $1`,
@@ -61,7 +61,7 @@ async function correctionReply(pool, vendorId, cmd) {
     await logFeedback(pool, { vendorId, messageId: r.message_id, text: r.raw_input, reason: 'corrected',
       detail: { type: r.type, from: Number(r.amount_tsh), to: cmd.amount } });
   }
-  return `Nimerekebisha ${describe(r)}: ${fmtTsh(r.amount_tsh)} → ${fmtTsh(cmd.amount)}.`;
+  return L.corrected(describe(r, false, lang), fmtTsh(r.amount_tsh), fmtTsh(cmd.amount));
 }
 
 module.exports = { parseCorrection, correctionReply };
