@@ -1,6 +1,7 @@
 // Undo ("futa") and correct ("rekebisha 6000") the vendor's most recent entry.
 const { parseLedgerEntry } = require('./parser');
 const { fmtTsh, describe } = require('./format');
+const { logFeedback } = require('./feedback');
 
 const UNDO = new Set(['futa', 'futa ya mwisho', 'futa hiyo', 'ondoa', 'undo', 'delete']);
 const CORRECT_RE = /^\s*(rekebisha|badilisha|sahihisha|correct|edit)\b(.*)$/i;
@@ -17,7 +18,7 @@ function parseCorrection(text) {
 // The vendor's latest entry group: all live transactions from their most recent recorded message.
 async function lastGroup(db, vendorId) {
   const { rows: [last] } = await db.query(
-    `SELECT id, type, amount_tsh, message_id, item, quantity, unit, counterparty FROM transactions
+    `SELECT id, type, amount_tsh, message_id, item, quantity, unit, counterparty, raw_input FROM transactions
       WHERE vendor_id = $1 AND deleted_at IS NULL AND status = 'confirmed'
       ORDER BY id DESC LIMIT 1`,
     [vendorId]
@@ -25,7 +26,7 @@ async function lastGroup(db, vendorId) {
   if (!last) return [];
   if (last.message_id === null) return [last];
   const { rows } = await db.query(
-    `SELECT id, type, amount_tsh, message_id, item, quantity, unit, counterparty FROM transactions
+    `SELECT id, type, amount_tsh, message_id, item, quantity, unit, counterparty, raw_input FROM transactions
       WHERE vendor_id = $1 AND message_id = $2 AND deleted_at IS NULL AND status = 'confirmed'
       ORDER BY id`,
     [vendorId, last.message_id]
@@ -56,6 +57,10 @@ async function correctionReply(pool, vendorId, cmd) {
     `UPDATE transactions SET amount_tsh = $2, updated_at = now() WHERE id = $1`,
     [r.id, cmd.amount]
   );
+  if (r.raw_input) {
+    await logFeedback(pool, { vendorId, messageId: r.message_id, text: r.raw_input, reason: 'corrected',
+      detail: { type: r.type, from: Number(r.amount_tsh), to: cmd.amount } });
+  }
   return `Nimerekebisha ${describe(r)}: ${fmtTsh(r.amount_tsh)} → ${fmtTsh(cmd.amount)}.`;
 }
 

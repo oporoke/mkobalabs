@@ -28,23 +28,29 @@ function toNumber(s) {
   return parseFloat(s.replace(/,/g, ''));
 }
 
-// Swahili number words, e.g. "elfu kumi na tano" = 15000, "elfu mbili na mia tano" = 2500
+// Swahili number words, e.g. "elfu kumi na tano" = 15000, "elfu mbili na mia tano" = 2500,
+// also without "na": "mia saba hamsini" = 750, "elfu mbili mia tano" = 2500
 function parseWords(tokens) {
   let i = 0;
   const isMult = t => t in MULTS;
   function num(level) {
-    let value = 0, seen = false;
+    const top = level === 5;
+    let value = 0, seen = false, lastUnit = false;
     while (i < tokens.length) {
       const t = tokens[i];
       if (isMult(t) && MULTS[t].rank < level) {
+        if (seen && !top) break;                 // "elfu mbili | mia tano": mia belongs to the outer number
         i++;
         const sub = num(MULTS[t].rank);
         value += MULTS[t].v * (sub || 1);
-        seen = true;
-      } else if (t in UNITS) { value += UNITS[t]; i++; seen = true; }
-      else if (/^\d+$/.test(t) && seen === false && i > 0 && isMult(tokens[i - 1])) { value += +t; i++; seen = true; }
+        seen = true; lastUnit = false;
+      } else if (t in UNITS) {
+        const v = UNITS[t];
+        if (!top && seen && (v >= 10 || lastUnit)) break; // "mia saba | hamsini": tens after a digit start a new term
+        value += v; i++; seen = true; lastUnit = v < 10;
+      } else if (/^\d+$/.test(t) && !seen && i > 0 && isMult(tokens[i - 1])) { value += +t; i++; seen = true; }
       else if (t === 'na') {
-        if (level < 5 && isMult(tokens[i + 1])) break; // "na mia ..." belongs to the outer number
+        if (!top && isMult(tokens[i + 1])) break; // "na mia ..." belongs to the outer number
         i++;
       } else break;
     }

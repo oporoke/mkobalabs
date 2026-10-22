@@ -1,6 +1,7 @@
 // Record parsed entries; uncertain ones wait for NDIO/HAPANA before counting.
 const { parseLedgerEntries } = require('./parser');
 const { savedMessage, listLines } = require('./format');
+const { logFeedback } = require('./feedback');
 
 const SAVE_MIN = 0.6;      // below this: not understood, ask to resend
 const CONFIRM_BELOW = 0.8; // between SAVE_MIN and this: ask the vendor to confirm
@@ -18,6 +19,8 @@ async function recordEntries(pool, vendorId, messageId, text) {
   const entries = parseLedgerEntries(text);
   const unclear = entries.filter(e => e.confidence < SAVE_MIN);
   if (entries.length === 0 || unclear.length) {
+    await logFeedback(pool, { vendorId, messageId, text, reason: 'not_understood',
+      detail: entries.map(e => ({ text: e.text, type: e.type, amount: e.amount, confidence: e.confidence })) });
     const what = unclear.length && entries.length > 1 ? ` "${unclear[0].text}"` : '';
     return `Samahani, sikuelewa vizuri${what}. Ulitumia/uliuza kiasi gani, TSh ngapi?`;
   }
@@ -77,11 +80,14 @@ async function confirmationReply(pool, vendorId, text) {
     return savedMessage(rows.map(r => ({ ...r, amount: r.amount_tsh })));
   }
 
-  await pool.query(
+  const { rows: rejected } = await pool.query(
     `UPDATE transactions SET deleted_at = now()
-      WHERE vendor_id = $1 AND message_id = $2 AND status = 'pending' AND deleted_at IS NULL`,
+      WHERE vendor_id = $1 AND message_id = $2 AND status = 'pending' AND deleted_at IS NULL
+      RETURNING raw_input, type, amount_tsh`,
     [vendorId, latest.message_id]
   );
+  await logFeedback(pool, { vendorId, messageId: latest.message_id, text: rejected.map(r => r.raw_input).join('\n'),
+    reason: 'rejected', detail: rejected.map(r => ({ type: r.type, amount: Number(r.amount_tsh) })) });
   return 'Sawa, sijahifadhi. Tafadhali tuma tena kwa usahihi, mfano: nimenunua mchele 25000';
 }
 
