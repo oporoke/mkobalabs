@@ -193,6 +193,29 @@ for (const [text, expected] of dash) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  dashboard ${JSON.stringify(text).padEnd(32)} -> ${r}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length;
+// Mobile-money SMS (real samples): [sms, kind, amount, fee, name, ref]
+const { parseMobileMoney } = require('./mobilemoney');
+const mmCases = [
+  ['UJH53B7F66 Confirmed. Ksh510.00 sent to EUNICE  OLUOCH 0729622160 on 17/10/26 at 12:50 PM. New M-PESA balance is Ksh0.00. Transaction cost, Ksh13.00.', 'currency'],
+  ['UIA536OXTF\n Confirmed. Ksh 27.65 from your M-PESA has been used to fully pay your outstanding Fuliza M-PESA.', 'currency'],
+  ['SUCCESS! TID #362570 USD 21.62 ANTHROPIC* CLAUDE SUB from your  card *1143 has been approved on 21-10-2026 01:43. Charge USD 21.62 Bal: 17,148.30.', 'card'],
+  ['Payment to Airtel Money Global Pay is successful. Transaction Amt: 2,704 TSh, Bal: 70338.97 TSh.TID: VD261021.1138.OG3856', 'own_transfer'],
+  ['Received 130,000 TSh from Agent: SELEMANI HASSANI. Balance: 130042.97 TSh. TID: CI261021.1112.S99790', 'own_transfer'],
+  ['You have successfully deposited 11,000.00 Tsh to Airtel Money Global Pay card.Charges 0.00 Tsh New Balance 557.97 Tsh. Date:10.13.26 TID:XX261013.1101.S12027', 'own_transfer'],
+  ['SENT TSh 1,000 equiv KES (FX 0.0465) to 742397883 DEBORA ODHIAMBO, 20/10/26. Fee TSh 20. Bal 42.97 TSh. TID: IO261020.2043.PI0586', 'person', 1000, 20, 'Debora Odhiambo', 'IO261020.2043.PI0586'],
+  ['You have paid 1,000 TSh for YATOSHA BUNDLE. Fee TSh0.00. Balance 1062.97 TSh. TID: BS261020.1656.B96475', 'bundle', 1000, 0, 'Yatosha Bundle', 'BS261020.1656.B96475'],
+  ['You have paid 1,000.00 Tsh to TIPS TIPS. Fee Tsh 45.00. Balance 10,512.97 Tsh. TID:XX261013.1424.X62862', 'merchant', 1000, 45, 'Tips Tips', 'XX261013.1424.X62862'],
+  ['Paid 1000.00 TSh to 255769225819 NICHOLAS OTIENO. Charges Tsh 45.00 (Service charge Tsh 45.00 + Govt Levy Tsh 0.00). TID:XX261013.1424.X62862', 'person', 1000, 45, 'Nicholas Otieno', 'XX261013.1424.X62862'],
+  ['Paid 10,000 Tsh to VODACOM TNQR.LIPA OLAYCE STEVEN LOTHA. Till 68708140, Fee Tsh 1,000.00.TID:XX261013.1035.U49330', 'merchant', 10000, 1000, 'Olayce Steven Lotha', 'XX261013.1035.U49330'],
+  ['nimeuza 5000', null], ['Juma amelipa 2000', null], ['paid rent 100k', null],
+];
+for (const [sms, kind, amount, fee, name, ref] of mmCases) {
+  const r = parseMobileMoney(sms);
+  const ok = kind === null ? r === null
+    : r && r.kind === kind && (amount === undefined || (r.amount === amount && r.fee === fee && r.name === name && r.ref === ref));
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  sms ${JSON.stringify(sms.slice(0, 34)).padEnd(38)} -> ${JSON.stringify(r)}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

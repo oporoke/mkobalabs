@@ -10,6 +10,7 @@ const { parseCorrection, correctionReply } = require('./corrections');
 const { recordEntries, confirmationReply } = require('./ledger');
 const { debtReply } = require('./debts');
 const { parseDashboardRequest, dashboardLinkReply } = require('./dashboard');
+const { mobileMoneyReply, transferChoiceReply, parseMobileMoney } = require('./mobilemoney');
 
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
@@ -52,7 +53,8 @@ async function processWebhook(body) {
     const text = msg.type === 'text' ? msg.text?.body : null;
     const switchTo = text ? parseLanguageSwitch(text) : null;
     lang = vendor.language || 'sw';
-    const wanted = switchTo || (text ? detectLanguage(text) : null);
+    // Pasted mobile-money SMS are always in the provider's language, so they say nothing about the vendor's.
+    const wanted = switchTo || (text && !parseMobileMoney(text) ? detectLanguage(text) : null);
     if (wanted && wanted !== lang) {
       await pool.query('UPDATE vendors SET language = $2 WHERE id = $1', [vendorId, wanted]);
       lang = wanted;
@@ -95,8 +97,16 @@ async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
   const correction = parseCorrection(text);
   if (correction) return { handler: `correction:${correction.action}`, reply: await correctionReply(pool, vendorId, correction, lang) };
 
+  // A pending "1/2/3?" question about money sent to a person (item 38) comes before YES/NO confirmations.
+  const transferChoice = await transferChoiceReply(pool, vendorId, text, lang);
+  if (transferChoice) return { handler: 'mm_choice', reply: transferChoice };
+
   const confirmation = await confirmationReply(pool, vendorId, text, lang);
   if (confirmation) return { handler: 'confirmation', reply: confirmation };
+
+  // Pasted mobile-money SMS, before debts: "You have paid ... to NAME" must not be read as a debt.
+  const mobileMoney = await mobileMoneyReply(pool, vendorId, messageId, text, lang);
+  if (mobileMoney) return { handler: 'mobile_money', reply: mobileMoney };
 
   // Debts before the ledger: "Juma amelipa 2000" must not be read as an expense.
   const debt = await debtReply(pool, vendorId, messageId, text, lang);

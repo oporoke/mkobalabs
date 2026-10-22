@@ -65,6 +65,16 @@ const T = {
     textOnlyHint: 'Samahani, ninaelewa ujumbe wa maandishi tu. Andika, mfano: nimeuza 5000 au nimenunua unga 20000',
     systemError: 'Samahani, kuna tatizo la mfumo. Tafadhali tuma tena baada ya muda mfupi.',
     languageSet: 'Sawa, nitajibu kwa Kiswahili. Kwa Kiingereza, tuma ENGLISH.',
+    mmIgnored: {
+      own_transfer: 'Huu ni uhamisho wa pesa zako mwenyewe, si mauzo wala gharama. Sijauweka kwenye hesabu.',
+      loan: 'Haya ni malipo ya mkopo, si mauzo wala gharama. Sijayaweka kwenye hesabu.',
+      card: 'Huu ni ujumbe wa kadi ya benki, si pesa ya simu. Sijauweka kwenye hesabu.',
+      currency: 'Mkoba inaweka hesabu kwa TSh tu. Ujumbe huu si wa TSh, kwa hiyo sijauweka.',
+    },
+    mmDuplicate: ref => `Muamala huu (${ref}) tayari umeshawekwa kwenye hesabu.`,
+    mmAskKind: (amt, name, fee) => `Umetuma ${amt} kwa ${name}${fee ? ` (ada ${fee})` : ''}. Hii ni nini?\n1 - Manunuzi (bidhaa za biashara)\n2 - Matumizi ya biashara\n3 - Si ya biashara (binafsi)\nJibu 1, 2 au 3.`,
+    mmChooseAgain: 'Tafadhali jibu 1 (manunuzi), 2 (matumizi) au 3 (binafsi).',
+    mmPersonal: 'Sawa, sijauweka kwenye hesabu za biashara.',
   },
   en: {
     labels: { sale: 'sale', purchase: 'purchase', expense: 'expense' },
@@ -131,6 +141,16 @@ const T = {
     textOnlyHint: 'Sorry, I only understand text messages. Type, e.g.: sold 5000 or bought flour 20000',
     systemError: 'Sorry, something went wrong on our side. Please send it again in a moment.',
     languageSet: "OK, I'll reply in English. For Swahili, send KISWAHILI.",
+    mmIgnored: {
+      own_transfer: "This moves your own money; it's not a sale or a cost. Not added to your records.",
+      loan: "This is a loan repayment, not a sale or a cost. Not added to your records.",
+      card: 'This is a bank card message, not mobile money. Not added to your records.',
+      currency: "Mkoba keeps records in TSh only. This message isn't in TSh, so it was not added.",
+    },
+    mmDuplicate: ref => `This transaction (${ref}) is already in your records.`,
+    mmAskKind: (amt, name, fee) => `You sent ${amt} to ${name}${fee ? ` (fee ${fee})` : ''}. What was it?\n1 - Purchase (stock for the business)\n2 - Business expense\n3 - Not business (personal)\nReply 1, 2 or 3.`,
+    mmChooseAgain: 'Please reply 1 (purchase), 2 (expense) or 3 (personal).',
+    mmPersonal: 'OK, not added to your business records.',
   },
 };
 
