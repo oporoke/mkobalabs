@@ -43,10 +43,18 @@ th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--rule);vertic
 th{color:var(--muted);font-weight:600}
 td.r,th.r{text-align:right}
 .wide{max-width:72rem}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:10px;margin:16px 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));gap:10px;margin:16px 0}
+table.days td:first-child{white-space:nowrap}
 .stats div{background:#fff;border:1.5px solid var(--rule);border-radius:10px;padding:10px 12px}
 .stats b{display:block;font-size:1.4rem}
 .scroll{overflow-x:auto}
+.facts{color:var(--muted);margin:0 0 8px}
+.note{color:var(--muted);font-size:.85rem;margin:8px 0 0;max-width:60rem}
+.bar{width:22%;min-width:80px}
+.bar span{display:block;height:10px;border-radius:2px;background:var(--rule)}
+td.msg{max-width:28rem;white-space:pre-wrap;word-break:break-word}
+code{background:#fff;border:1px solid var(--rule);border-radius:4px;padding:1px 5px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 `;
 
