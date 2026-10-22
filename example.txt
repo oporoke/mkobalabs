@@ -1,0 +1,4 @@
+Admin password: CSXvuRusxswY2un4OzC1TlvV
+PRIVACY_CONTACT=your-email@example.com
+DATA_LOCATION=Germany
+DATA_LOCATION_SW=Ujerumani
