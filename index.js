@@ -15,6 +15,10 @@ const { debtReply } = require('./debts');
 process.on('unhandledRejection', err => log.error('unhandled_rejection', { error: err?.message, stack: err?.stack }));
 
 const app = express();
+
+// While shutting down, tell clients not to reuse this connection.
+let shuttingDown = false;
+app.use((_req, res, next) => { if (shuttingDown) res.set('Connection', 'close'); next(); });
 app.set('trust proxy', 'loopback'); // trust X-Forwarded-For only from nginx on this machine
 app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
@@ -59,15 +63,26 @@ const NON_TEXT_HINTS = {
 };
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
+// Webhook work still running after the 200 ack; shutdown waits for it so no message is lost.
+let inFlight = 0;
+
 app.post('/webhook', async (req, res) => {
   if (!validSignature(req)) {
     log.warn('webhook_rejected', { ip: req.ip });
     return res.sendStatus(401);
   }
   res.sendStatus(200); // ack immediately — do the work after
+  inFlight++;
+  try {
+    await processWebhook(req.body);
+  } finally {
+    inFlight--;
+  }
+});
 
+async function processWebhook(body) {
   const started = Date.now();
-  const value = req.body.entry?.[0]?.changes?.[0]?.value;
+  const value = body.entry?.[0]?.changes?.[0]?.value;
   const msg = value?.messages?.[0];
 
   const receivedOn = value?.metadata?.phone_number_id;
@@ -147,8 +162,27 @@ app.post('/webhook', async (req, res) => {
     log.error('message_failed', { id: msg.id, vendor: vendorId, error: err.message, stack: err.stack });
     if (msg.from) await sendText(msg.from, 'Samahani, kuna tatizo la mfumo. Tafadhali tuma tena baada ya muda mfupi.');
   }
-});
+}
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
-app.listen(PORT, HOST, () => log.info('server_started', { host: HOST, port: PORT }));
+const server = app.listen(PORT, HOST, () => {
+  log.info('server_started', { host: HOST, port: PORT, pid: process.pid });
+  if (process.send) process.send('ready'); // PM2 wait_ready: old instance is stopped only after this
+});
+
+// Graceful shutdown (PM2 reload/restart, systemd stop): stop accepting, finish in-flight work, then exit.
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log.info('shutdown_started', { signal, in_flight: inFlight, pid: process.pid });
+  server.close();                // stop accepting new connections
+  server.closeIdleConnections(); // drop idle keep-alive connections so clients reconnect to a live instance
+  const deadline = Date.now() + 10000;
+  while (inFlight > 0 && Date.now() < deadline) await new Promise(r => setTimeout(r, 100));
+  await pool.end().catch(() => {});
+  log.info('shutdown_complete', { in_flight: inFlight, pid: process.pid });
+  process.stdout.write('', () => process.exit(0)); // flush the log line before exiting
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
