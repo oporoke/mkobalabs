@@ -24,6 +24,8 @@ const HELP = [
   'Mkoba - jinsi ya kutumia:',
   '• Rekodi: nimeuza 5000, nimenunua unga 20000, nimelipa nauli 2000',
   '• Muhtasari: leo, jana, wiki, mwezi, salio',
+  '• Madeni: Juma ananidai 5000, namdai Juma 5000, Juma amelipa 2000, nimemlipa Juma 2000',
+  '• Kuona madeni: madeni, au deni Juma',
   '• Kufuta rekodi ya mwisho: futa',
   '• Kubadilisha kiasi cha mwisho: rekebisha 6000',
   '• Msaada: msaada',
@@ -60,7 +62,8 @@ async function getSummaryRows(pool, vendorId, period) {
   const { rows } = await pool.query(
     `SELECT type, SUM(amount_tsh) AS total, COUNT(*) AS n
        FROM transactions
-      WHERE vendor_id = $1 AND deleted_at IS NULL AND status = 'confirmed' ${range}
+      WHERE vendor_id = $1 AND deleted_at IS NULL AND status = 'confirmed'
+        AND type IN ('sale', 'purchase', 'expense') ${range}
       GROUP BY type`,
     [vendorId]
   );

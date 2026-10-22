@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { debtReply } = require('./debts');
 const crypto = require('crypto');
 process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
 
@@ -163,6 +164,11 @@ app.post('/webhook', async (req, res) => {
       return;
     }
 
+    const debt = await debtReply(pool, vendorId, logged.rows[0].id, text);
+    if (debt) {
+      await sendWhatsAppMessage(phone, debt);
+      return;
+    }
     await sendWhatsAppMessage(phone, await recordEntries(pool, vendorId, logged.rows[0].id, text));
     // } catch (err) {
     //   await client.query('ROLLBACK');

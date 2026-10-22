@@ -99,6 +99,36 @@ for (const [text, item, quantity, unit] of items) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  item ${JSON.stringify(text).padEnd(37)} -> ${r.item} | ${r.quantity} ${r.unit || ''}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length;
+// Debts: [text, type, name, amount]
+const { parseDebt, parseDebtQuery } = require('./debts');
+const debts = [
+  ['Juma ananidai 5000', 'credit_received', 'Juma', 5000],
+  ['nadaiwa na Juma elfu tano', 'credit_received', 'Juma', 5000],
+  ['nimekopa kwa mama Asha 20,000', 'credit_received', 'Mama Asha', 20000],
+  ['namdai Juma 5000', 'credit_given', 'Juma', 5000],
+  ['Hassan anadaiwa 12k', 'credit_given', 'Hassan', 12000],
+  ['nimemkopesha Neema 3000', 'credit_given', 'Neema', 3000],
+  ['Juma amelipa 2000', 'repayment_received', 'Juma', 2000],
+  ['leo Juma amenilipa tsh 1500', 'repayment_received', 'Juma', 1500],
+  ['nimemlipa Juma 2000', 'repayment_made', 'Juma', 2000],
+  ['nimelipa deni la Hassan 4000', 'repayment_made', 'Hassan', 4000],
+  ['Juma owes me 7000', 'credit_given', 'Juma', 7000],
+  ['Juma ananidai', 'credit_received', 'Juma', null],
+  ['nimelipa kodi 50000', null], ['nimeuza 5000', null], ['paid rent 100k', null], ['nimenunua unga 20000', null],
+];
+for (const [text, type, name, amount] of debts) {
+  const r = parseDebt(text);
+  const ok = type === null ? r === null : (r && r.type === type && r.name === name && r.amount === amount);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  debt ${JSON.stringify(text).padEnd(37)} -> ${JSON.stringify(r)}`);
+}
+const dq = [['madeni', { all: true }], ['Deni', { all: true }], ['deni la juma', { name: 'Juma' }], ['deni mama asha', { name: 'Mama Asha' }], ['deni la juma 5000', null]];
+for (const [text, expected] of dq) {
+  const r = parseDebtQuery(text);
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  debt query ${JSON.stringify(text).padEnd(31)} -> ${JSON.stringify(r)}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

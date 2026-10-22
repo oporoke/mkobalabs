@@ -17,7 +17,7 @@ function parseCorrection(text) {
 // The vendor's latest entry group: all live transactions from their most recent recorded message.
 async function lastGroup(db, vendorId) {
   const { rows: [last] } = await db.query(
-    `SELECT id, type, amount_tsh, message_id, item, quantity, unit FROM transactions
+    `SELECT id, type, amount_tsh, message_id, item, quantity, unit, counterparty FROM transactions
       WHERE vendor_id = $1 AND deleted_at IS NULL AND status = 'confirmed'
       ORDER BY id DESC LIMIT 1`,
     [vendorId]
@@ -25,7 +25,7 @@ async function lastGroup(db, vendorId) {
   if (!last) return [];
   if (last.message_id === null) return [last];
   const { rows } = await db.query(
-    `SELECT id, type, amount_tsh, message_id, item, quantity, unit FROM transactions
+    `SELECT id, type, amount_tsh, message_id, item, quantity, unit, counterparty FROM transactions
       WHERE vendor_id = $1 AND message_id = $2 AND deleted_at IS NULL AND status = 'confirmed'
       ORDER BY id`,
     [vendorId, last.message_id]
