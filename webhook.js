@@ -22,9 +22,13 @@ async function processWebhook(body) {
   const value = body.entry?.[0]?.changes?.[0]?.value;
   const msg = value?.messages?.[0];
 
+  // Only handle traffic for this environment's own number (item 35). The Meta app has one webhook URL,
+  // so messages to another number (e.g. the test number) also arrive here; they must not touch this database.
   const receivedOn = value?.metadata?.phone_number_id;
   if (receivedOn && receivedOn !== process.env.WHATSAPP_PHONE_NUMBER_ID) {
-    log.warn('phone_number_id_mismatch', { received_on: receivedOn, configured: process.env.WHATSAPP_PHONE_NUMBER_ID });
+    log.warn('other_number_ignored', { received_on: receivedOn, configured: process.env.WHATSAPP_PHONE_NUMBER_ID,
+      kind: value?.messages ? 'message' : value?.statuses ? 'status' : 'other' });
+    return;
   }
 
   const status = value?.statuses?.[0];
