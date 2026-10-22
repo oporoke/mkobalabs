@@ -147,6 +147,15 @@ for (const [text, expected] of biz) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  business ${JSON.stringify(text).padEnd(33)} -> ${r}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length;
+// Report settings
+const { parseReportSetting } = require('./reports');
+const rep = [['acha ripoti', false], ['ACHA RIPOTI!', false], ['anza ripoti', true], ['ripoti', null], ['acha', null]];
+for (const [text, expected] of rep) {
+  const r = parseReportSetting(text);
+  const ok = r === expected;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  report ${JSON.stringify(text).padEnd(35)} -> ${r}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

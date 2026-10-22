@@ -2,6 +2,7 @@ require('dotenv').config();
 const { debtReply } = require('./debts');
 const { getVendor, onboardingReply, isActionable, WELCOME } = require('./onboarding');
 const crypto = require('crypto');
+const { reportSettingReply } = require('./reports');
 process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
 
 const pool = require('./db');
@@ -159,6 +160,11 @@ app.post('/webhook', async (req, res) => {
     const command = parseCommand(text);
     if (command) {
       await sendWhatsAppMessage(phone, await commandReply(pool, vendorId, command));
+      return;
+    }
+        const reportSetting = await reportSettingReply(pool, vendorId, text);
+    if (reportSetting) {
+      await sendWhatsAppMessage(phone, reportSetting);
       return;
     }
     const correction = parseCorrection(text);
