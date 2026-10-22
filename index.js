@@ -1,18 +1,19 @@
-require('dotenv').config();
-const { debtReply } = require('./debts');
-const { getVendor, onboardingReply, isActionable, WELCOME } = require('./onboarding');
+require('dotenv').config({ quiet: true });
 const crypto = require('crypto');
-const { reportSettingReply } = require('./reports');
-process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
-
-const pool = require('./db');
-const { parseLedgerEntry } = require('./parser');
-const { parseLedgerEntries } = require('./parser');
-const { recordEntries, confirmationReply } = require('./ledger');
-const { parseCorrection, correctionReply } = require('./corrections');
-const { parseCommand, commandReply } = require('./summary');
-const axios = require('axios');
 const express = require('express');
+
+const log = require('./log');
+const pool = require('./db');
+const { sendText } = require('./whatsapp');
+const { getVendor, onboardingReply, isActionable, WELCOME } = require('./onboarding');
+const { parseCommand, commandReply } = require('./summary');
+const { reportSettingReply } = require('./reports');
+const { parseCorrection, correctionReply } = require('./corrections');
+const { recordEntries, confirmationReply } = require('./ledger');
+const { debtReply } = require('./debts');
+
+process.on('unhandledRejection', err => log.error('unhandled_rejection', { error: err?.message, stack: err?.stack }));
+
 const app = express();
 app.set('trust proxy', 'loopback'); // trust X-Forwarded-For only from nginx on this machine
 app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
@@ -26,107 +27,56 @@ function validSignature(req) {
   return expected.length === received.length && crypto.timingSafeEqual(expected, received);
 }
 
-
-// const fmtTsh = n => 'TSh ' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
-// const capitalize = s => s.charAt(0).toUpperCase() + s.slice(1);
-
+app.get('/', (_req, res) => res.send('Mkoba API is running'));
 
 // Meta's one-time webhook verification handshake
 app.get('/webhook', (req, res) => {
-  console.log('=== Incoming webhook ===');
-  console.log(JSON.stringify(req.body, null, 2));
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
-  if (mode === 'subscribe' && token === process.env.WEBHOOK_VERIFY_TOKEN) {
-    return res.status(200).send(challenge);
+  if (req.query['hub.mode'] === 'subscribe' && req.query['hub.verify_token'] === process.env.WEBHOOK_VERIFY_TOKEN) {
+    log.info('webhook_verified');
+    return res.status(200).send(req.query['hub.challenge']);
   }
+  log.warn('webhook_verify_failed', { ip: req.ip });
   res.sendStatus(403);
 });
 
-// Actual incoming messages land here
-// app.post('/webhook', (req, res) => {
-//   console.log(JSON.stringify(req.body, null, 2)); // just log for now — Step 11 makes this real
-//   res.sendStatus(200);
-// });
-
-
-
-
-
-// async function sendWhatsAppMessage(to, body) {
-//   await axios.post(
-//     `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
-//     { messaging_product: 'whatsapp', to, text: { body } },
-//     { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } }
-//   );
-// }
-async function sendWhatsAppMessage(to, body) {
-  try {
-    const response = await axios.post(
-      `https://graph.facebook.com/v20.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: 'whatsapp',
-        to,
-        text: { body }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    console.log("WhatsApp sent:", response.data);
-
-  } catch (err) {
-    console.log("WhatsApp API error:");
-    console.log(JSON.stringify(err.response?.data, null, 2));
-  }
-}
-
-// async function getOrCreateVendor(phone) {
-//   const { rows } = await pool.query(
-//     `INSERT INTO vendors (phone_number, name, onboarded_via)
-//      VALUES ($1, $1, 'whatsapp')
-//      ON CONFLICT (phone_number) DO UPDATE SET phone_number = EXCLUDED.phone_number
-//      RETURNING id`,
-//     [phone]
-//   );
-//   return rows[0].id;
-// }
-
-app.get("/", async (req, res) => {
-  res.send("Mkoba API is running");
-});
-
+const NON_TEXT_HINTS = {
+  audio: 'Samahani, bado siwezi kusikiliza ujumbe wa sauti. Tafadhali andika, mfano: nimeuza 5000',
+  other: 'Samahani, ninaelewa ujumbe wa maandishi tu. Andika, mfano: nimeuza 5000 au nimenunua unga 20000',
+};
+const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
 app.post('/webhook', async (req, res) => {
   if (!validSignature(req)) {
-    console.warn('Rejected webhook: invalid signature from', req.ip);
+    log.warn('webhook_rejected', { ip: req.ip });
     return res.sendStatus(401);
   }
-  console.log("Called");
   res.sendStatus(200); // ack immediately — do the work after
 
+  const started = Date.now();
   const value = req.body.entry?.[0]?.changes?.[0]?.value;
   const msg = value?.messages?.[0];
 
-  try {
-    console.log('Received on phone_number_id:', value?.metadata?.phone_number_id);
+  const receivedOn = value?.metadata?.phone_number_id;
+  if (receivedOn && receivedOn !== process.env.WHATSAPP_PHONE_NUMBER_ID) {
+    log.warn('phone_number_id_mismatch', { received_on: receivedOn, configured: process.env.WHATSAPP_PHONE_NUMBER_ID });
+  }
 
-    const status = value?.statuses?.[0];
-    if (status) {
-      console.log('Status:', status.status, JSON.stringify(status.errors || []));
-      return;
+  const status = value?.statuses?.[0];
+  if (status) {
+    if (status.status === 'failed') {
+      log.warn('delivery_failed', { wa_id: status.id, to: log.mask(status.recipient_id), errors: status.errors });
+    } else {
+      log.debug('delivery_status', { wa_id: status.id, status: status.status });
     }
+    return;
+  }
+  if (!msg) return;
 
-    if (!msg) return;
-
+  let vendorId;
+  try {
     const phone = msg.from;
     const vendor = await getVendor(pool, phone);
-    const vendorId = vendor.id;
+    vendorId = vendor.id;
 
     const logged = await pool.query(
       `INSERT INTO messages_log (wa_message_id, vendor_id, phone_number, channel, direction, raw_payload)
@@ -136,73 +86,55 @@ app.post('/webhook', async (req, res) => {
       [msg.id, vendorId, phone, JSON.stringify(msg)]
     );
     if (logged.rowCount === 0) {
-      console.log('Duplicate message ignored:', msg.id);
+      log.info('duplicate_ignored', { id: msg.id, vendor: vendorId });
       return;
     }
-    if (vendor.created) await sendWhatsAppMessage(phone, WELCOME);
+    const messageId = logged.rows[0].id;
+    log.info('message_received', { id: msg.id, type: msg.type, vendor: vendorId, from: log.mask(phone), new_vendor: vendor.created });
+
+    const respond = async (handler, body) => {
+      await sendText(phone, body);
+      log.info('message_handled', { id: msg.id, vendor: vendorId, handler, ms: Date.now() - started });
+    };
+
+    if (vendor.created) await sendText(phone, WELCOME);
 
     if (msg.type !== 'text') {
-      if (msg.type === 'audio') {
-        await sendWhatsAppMessage(phone, "Samahani, bado siwezi kusikiliza ujumbe wa sauti. Tafadhali andika, mfano: nimeuza 5000");
-      } else if (['image', 'video', 'document', 'sticker', 'location', 'contacts'].includes(msg.type)) {
-        await sendWhatsAppMessage(phone, "Samahani, ninaelewa ujumbe wa maandishi tu. Andika, mfano: nimeuza 5000 au nimenunua unga 20000");
-      }
-      return; // reactions and other types: logged, no reply
+      if (msg.type === 'audio') return respond('non_text', NON_TEXT_HINTS.audio);
+      if (HINT_TYPES.includes(msg.type)) return respond('non_text', NON_TEXT_HINTS.other);
+      return log.info('message_handled', { id: msg.id, vendor: vendorId, handler: 'ignored', ms: Date.now() - started });
     }
 
     const text = msg.text.body;
+
     const onboarding = await onboardingReply(pool, vendor, text);
-    if (onboarding) {
-      await sendWhatsAppMessage(phone, onboarding);
-      return;
+    if (onboarding) return respond('onboarding', onboarding);
+    if (vendor.created && !isActionable(text)) {
+      return log.info('message_handled', { id: msg.id, vendor: vendorId, handler: 'welcome', ms: Date.now() - started });
     }
-    if (vendor.created && !isActionable(text)) return; // e.g. "habari": the welcome is the reply
+
     const command = parseCommand(text);
-    if (command) {
-      await sendWhatsAppMessage(phone, await commandReply(pool, vendorId, command));
-      return;
-    }
-        const reportSetting = await reportSettingReply(pool, vendorId, text);
-    if (reportSetting) {
-      await sendWhatsAppMessage(phone, reportSetting);
-      return;
-    }
+    if (command) return respond(`command:${command}`, await commandReply(pool, vendorId, command));
+
+    const reportSetting = await reportSettingReply(pool, vendorId, text);
+    if (reportSetting) return respond('report_setting', reportSetting);
+
     const correction = parseCorrection(text);
-    if (correction) {
-      await sendWhatsAppMessage(phone, await correctionReply(pool, vendorId, correction));
-      return;
-    }
+    if (correction) return respond(`correction:${correction.action}`, await correctionReply(pool, vendorId, correction));
 
     const confirmation = await confirmationReply(pool, vendorId, text);
-    if (confirmation) {
-      await sendWhatsAppMessage(phone, confirmation);
-      return;
-    }
+    if (confirmation) return respond('confirmation', confirmation);
 
-    const debt = await debtReply(pool, vendorId, logged.rows[0].id, text);
-    if (debt) {
-      await sendWhatsAppMessage(phone, debt);
-      return;
-    }
-    await sendWhatsAppMessage(phone, await recordEntries(pool, vendorId, logged.rows[0].id, text));
-    // } catch (err) {
-    //   await client.query('ROLLBACK');
-    //   throw err; // handled by the outer catch
-    // } finally {
-    //   client.release();
-    // }
+    const debt = await debtReply(pool, vendorId, messageId, text);
+    if (debt) return respond('debt', debt);
 
-    // // const lines = entries.map(e => `- ${e.type} TSh ${e.amount}`).join('\n');
-    // // await sendWhatsAppMessage(phone, `Sawa! Nimeongeza:\n${lines}\nAsante!`);
-    //   await sendWhatsAppMessage(phone, confirmationMessage(entries));
+    return respond('ledger', await recordEntries(pool, vendorId, messageId, text));
   } catch (err) {
-    console.error('Webhook processing failed:', msg?.id || '(no message id)', err.stack);
-    if (msg?.from) {
-      await sendWhatsAppMessage(msg.from, "Samahani, kuna tatizo la mfumo. Tafadhali tuma tena baada ya muda mfupi.");
-    }
+    log.error('message_failed', { id: msg.id, vendor: vendorId, error: err.message, stack: err.stack });
+    if (msg.from) await sendText(msg.from, 'Samahani, kuna tatizo la mfumo. Tafadhali tuma tena baada ya muda mfupi.');
   }
 });
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
-app.listen(PORT, HOST, () => console.log(`Mkoba server running on ${HOST}:${PORT}`));
+app.listen(PORT, HOST, () => log.info('server_started', { host: HOST, port: PORT }));
