@@ -5,6 +5,9 @@ const log = require('./log');
 const pool = require('./db');
 const { sendHealth } = require('./whatsapp');
 const { processWebhook } = require('./webhook');
+const { secureHeaders, page } = require('./html');
+const dashboard = require('./dashboard');
+const admin = require('./admin');
 
 const state = { inFlight: 0, shuttingDown: false }; // read by index.js during shutdown
 
@@ -63,6 +66,16 @@ app.post('/webhook', async (req, res) => {
   } finally {
     state.inFlight--;
   }
+});
+
+// Web pages: vendor dashboard and admin.
+app.use('/d', secureHeaders, dashboard.router);
+app.use('/admin', secureHeaders, admin.router);
+
+// Errors from web pages: log, show a plain error page (no internal details).
+app.use((err, req, res, _next) => {
+  log.error('web_error', { path: req.path, error: err.message, stack: err.stack });
+  res.status(500).send(page('Hitilafu', '<div class="card"><h1>Kuna hitilafu</h1><p>Jaribu tena baada ya muda mfupi.</p></div>'));
 });
 
 module.exports = { app, state };

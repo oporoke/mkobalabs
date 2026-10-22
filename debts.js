@@ -70,7 +70,8 @@ async function personBalance(pool, vendorId, name) {
   return r;
 }
 
-async function allBalances(pool, vendorId) {
+// Non-zero balances per person: [{ name, balance }] (positive = they owe the vendor)
+async function balanceRows(pool, vendorId) {
   const { rows } = await pool.query(
     `SELECT min(counterparty) AS name, SUM(${SIGNED}) AS balance FROM transactions
       WHERE vendor_id = $1 AND ${LIVE}
@@ -79,6 +80,11 @@ async function allBalances(pool, vendorId) {
       ORDER BY abs(SUM(${SIGNED})) DESC`,
     [vendorId]
   );
+  return rows;
+}
+
+async function allBalances(pool, vendorId) {
+  const rows = await balanceRows(pool, vendorId);
   if (!rows.length) return 'Hakuna madeni.';
   const owedToMe = rows.filter(r => Number(r.balance) > 0);
   const iOwe = rows.filter(r => Number(r.balance) < 0);
@@ -117,4 +123,4 @@ async function debtReply(pool, vendorId, messageId, text) {
   return `Sawa! ${ACTION[d.type](d.name, fmtTsh(d.amount))}.\nSalio: ${balanceLine(d.name, r.balance)}.`;
 }
 
-module.exports = { parseDebt, parseDebtQuery, debtReply, ACTION };
+module.exports = { parseDebt, parseDebtQuery, debtReply, balanceRows, ACTION };

@@ -27,6 +27,7 @@ const HELP = [
   '• Madeni: Juma ananidai 5000, namdai Juma 5000, Juma amelipa 2000, nimemlipa Juma 2000',
   '• Kuona madeni: madeni, au deni Juma',
   '• Ripoti ya jioni: ACHA RIPOTI / ANZA RIPOTI',
+  '• Dashibodi ya mtandaoni: dashibodi',
   '• Kufuta rekodi ya mwisho: futa',
   '• Kubadilisha kiasi cha mwisho: rekebisha 6000',
   '• Msaada: msaada',

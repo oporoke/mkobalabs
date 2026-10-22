@@ -8,6 +8,7 @@ const { reportSettingReply } = require('./reports');
 const { parseCorrection, correctionReply } = require('./corrections');
 const { recordEntries, confirmationReply } = require('./ledger');
 const { debtReply } = require('./debts');
+const { parseDashboardRequest, dashboardLinkReply } = require('./dashboard');
 
 const NON_TEXT_HINTS = {
   audio: 'Samahani, bado siwezi kusikiliza ujumbe wa sauti. Tafadhali andika, mfano: nimeuza 5000',
@@ -81,6 +82,8 @@ async function routeText({ vendor, vendorId, messageId, text }) {
 
   const reportSetting = await reportSettingReply(pool, vendorId, text);
   if (reportSetting) return { handler: 'report_setting', reply: reportSetting };
+
+  if (parseDashboardRequest(text)) return { handler: 'dashboard_link', reply: await dashboardLinkReply(pool, vendorId) };
 
   const correction = parseCorrection(text);
   if (correction) return { handler: `correction:${correction.action}`, reply: await correctionReply(pool, vendorId, correction) };

@@ -180,6 +180,15 @@ for (const [text, type, amount] of typos) {
 const typoDebt = parseDebt('Sabina amelipa 2000');
 if (!(typoDebt && typoDebt.name === 'Sabina' && typoDebt.amount === 2000)) { fail++; console.log('FAIL  debt name Sabina'); }
 else console.log('PASS  debt name "Sabina" is not turned into a number');
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1;
+// Dashboard link request
+const { parseDashboardRequest } = require('./dashboard');
+const dash = [['dashibodi', true], ['Dashibodi!', true], ['dashboard', true], ['nimeuza 5000', false], ['leo', false]];
+for (const [text, expected] of dash) {
+  const r = parseDashboardRequest(text);
+  const ok = r === expected;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  dashboard ${JSON.stringify(text).padEnd(32)} -> ${r}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);
