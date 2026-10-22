@@ -12,7 +12,53 @@ const TYPES = [
 
 const UNITS = { moja: 1, mbili: 2, tatu: 3, nne: 4, tano: 5, sita: 6, saba: 7, nane: 8, tisa: 9,
   kumi: 10, ishirini: 20, thelathini: 30, arobaini: 40, hamsini: 50, sitini: 60, sabini: 70, themanini: 80, tisini: 90 };
-const MULTS = { mia: { v: 100, rank: 1 }, elfu: { v: 1000, rank: 2 }, laki: { v: 100000, rank: 3 }, milioni: { v: 1000000, rank: 4 } };
+const MULTS = { mia: { v: 100, rank: 1 }, elfu: { v: 1000, rank: 2 }, laki: { v: 100000, rank: 3 }, milioni: { v: 1000000, rank: 4 },
+  // slang: buku/ngiri/thao = 1,000 ("buku tano" = 5,000), jero = 500 ("jero mbili" = 1,000)
+  buku: { v: 1000, rank: 2 }, ngiri: { v: 1000, rank: 2 }, thao: { v: 1000, rank: 2 }, jero: { v: 500, rank: 1 } };
+
+// Spelling variants of number words
+const VARIANTS = { elf: 'elfu', elfuu: 'elfu', milion: 'milioni', million: 'milioni', laaki: 'laki' };
+
+// Typo tolerance for verbs: "nmeuza", "nimeuuza", "nimeuxa", "nimenunu" -> canonical form.
+const CANON_VERBS = ['nimeuza', 'niliuza', 'tumeuza', 'tuliuza', 'nimeuzia', 'nauza', 'mauzo',
+  'nimenunua', 'nilinunua', 'tumenunua', 'nanunua', 'manunuzi',
+  'nimelipa', 'nililipa', 'tumelipa', 'nimetumia', 'nilitumia', 'matumizi', 'gharama',
+  'bought', 'spent', 'purchased', 'expense'];
+// Real words that are close to a verb but mean something else; never "correct" these.
+const REAL_WORDS = new Set(['nimeona', 'nimeuma', 'nimelima', 'nimepita', 'nimelala', 'nimekula', 'nimefika', 'nimeamka',
+  'nimechoka', 'nimeoga', 'nimeenda', 'nimekuja', 'nimeuliza', 'niliuliza', 'nimesema', 'nimeanza', 'nimepata', 'nimepokea',
+  'nimetuma', 'nimelia', 'nililia', 'nimekaa', 'mauaji', 'gharika', 'spend', 'expensive']);
+
+// Optimal string alignment distance (Levenshtein + adjacent transpositions)
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  }
+  return d[a.length][b.length];
+}
+
+function fixVerb(w) {
+  if (w.length < 5 || REAL_WORDS.has(w) || CANON_VERBS.includes(w)) return w;
+  const limit = w.length >= 8 ? 2 : 1;
+  let best = null, bestDist = Infinity, tie = false;
+  for (const c of CANON_VERBS) {
+    const dist = editDistance(w, c);
+    if (dist < bestDist) { best = c; bestDist = dist; tie = false; }
+    else if (dist === bestDist) tie = true;
+  }
+  return bestDist <= limit && !tie ? best : w;
+}
+
+// Lowercase and fix known variants/typos word by word.
+function normalize(text) {
+  return String(text || '').toLowerCase().replace(/[a-z]+/g, w => VARIANTS[w] || fixVerb(w));
+}
 
 // Measurement units -> normalized name
 const MEASURE = { kg: 'kg', kgs: 'kg', kilo: 'kg', kilos: 'kg', lita: 'l', litre: 'l', liter: 'l', litres: 'l', liters: 'l',
@@ -103,7 +149,7 @@ function findNumbers(lower) {
 }
 
 function parseLedgerEntry(text) {
-  const lower = String(text || '').toLowerCase();
+  const lower = normalize(text);
 
   const matched = TYPES.filter(t => t.re.test(lower));
   const kind = matched.length === 1 ? matched[0] : null;
@@ -155,8 +201,9 @@ function parseLedgerEntry(text) {
 // Split a message into one segment per entry: by line, then at each verb (nimeuza ... nimenunua ...).
 function splitEntries(text) {
   const segments = [];
-  for (const line of String(text || '').split(/\r?\n/)) {
-    const lower = line.toLowerCase();
+  for (const rawLine of String(text || '').split(/\r?\n/)) {
+    const line = normalize(rawLine);
+    const lower = line;
     const starts = [];
     for (const t of TYPES) for (const m of lower.matchAll(new RegExp(t.re.source, 'g'))) starts.push(m.index);
     starts.sort((a, b) => a - b);
@@ -173,4 +220,4 @@ function parseLedgerEntries(text) {
   return splitEntries(text).map(seg => ({ ...parseLedgerEntry(seg), text: seg }));
 }
 
-module.exports = { parseLedgerEntry, parseLedgerEntries, splitEntries };
+module.exports = { parseLedgerEntry, parseLedgerEntries, splitEntries, normalize };

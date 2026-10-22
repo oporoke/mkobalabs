@@ -162,6 +162,24 @@ for (const [text, expected] of rep) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  report ${JSON.stringify(text).padEnd(35)} -> ${r}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length;
+// Typos and slang: [text, type, amount]
+const typos = [
+  ['nmeuza 5000', 'sale', 5000], ['nimeuuza 5000', 'sale', 5000], ['nimeuxa chips 3000', 'sale', 3000],
+  ['Nimeauza 4000', 'sale', 4000], ['nimenunu mkaa 3000', 'purchase', 3000], ['nimenunuwa unga 20000', 'purchase', 20000],
+  ['nmelipa nauli 2000', 'expense', 2000], ['nimetumi nauli 1500', 'expense', 1500],
+  ['nimeuza buku tano', 'sale', 5000], ['nimeuza buku 5', 'sale', 5000], ['nimeuza buku mbili jero', 'sale', 2500],
+  ['nimeuza jero', 'sale', 500], ['nimelipa ngiri 3', 'expense', 3000], ['nimeuza elf 10', 'sale', 10000],
+  ['nimeona 5000', 'unknown', 5000], ['nimelima 5000', 'unknown', 5000], ['nimepita 5000', 'unknown', 5000],
+];
+for (const [text, type, amount] of typos) {
+  const r = p(text);
+  const ok = r.type === type && r.amount === amount;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  typo ${JSON.stringify(text).padEnd(37)} -> ${r.type} ${r.amount} ${r.confidence}`);
+}
+const typoDebt = parseDebt('Sabina amelipa 2000');
+if (!(typoDebt && typoDebt.name === 'Sabina' && typoDebt.amount === 2000)) { fail++; console.log('FAIL  debt name Sabina'); }
+else console.log('PASS  debt name "Sabina" is not turned into a number');
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);
