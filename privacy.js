@@ -54,7 +54,7 @@ async function deleteVendorData(pool, vendorId) {
   const counts = {};
   try {
     await client.query('BEGIN');
-    for (const table of ['statement_links', 'login_tokens', 'sessions', 'report_log', 'parse_feedback', 'transactions', 'messages_log']) {
+    for (const table of ['stock_items', 'statement_links', 'login_tokens', 'sessions', 'report_log', 'parse_feedback', 'transactions', 'messages_log']) {
       counts[table] = (await client.query(`DELETE FROM ${table} WHERE vendor_id = $1`, [vendorId])).rowCount;
     }
     counts.vendors = (await client.query('DELETE FROM vendors WHERE id = $1', [vendorId])).rowCount;

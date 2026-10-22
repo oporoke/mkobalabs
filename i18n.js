@@ -31,6 +31,7 @@ const T = {
       '• Muhtasari: leo, jana, wiki, mwezi, salio',
       '• Madeni: Juma ananidai 5000, namdai Juma 5000, Juma amelipa 2000, nimemlipa Juma 2000',
       '• Kuona madeni: madeni, au deni Juma',
+      '• Stoo: stoo (kuona), stoo mchele kilo 20 (kuweka), stoo mchele chini ya 5 (tahadhari)',
       '• Ripoti ya jioni: ACHA RIPOTI / ANZA RIPOTI',
       '• Dashibodi ya mtandaoni: dashibodi',
       '• Taarifa ya biashara (kwa mkopo): taarifa ya biashara',
@@ -88,6 +89,21 @@ const T = {
     weeklyDebts: lines => `Unaowadai:\n${lines}`,
     statementReady: (days, url) => `Taarifa yako ya biashara iko tayari (miezi 6 iliyopita). Unaweza kumtumia mkopeshaji au SACCO kiungo hiki; kinafanya kazi siku ${days}:\n${url}\nKukifunga mapema, andika FUNGA TAARIFA.`,
     statementRevoked: 'Sawa, viungo vyote vya taarifa yako ya biashara vimefungwa.',
+    stockTitle: '📦 Stoo yako:',
+    stockEmpty: 'Bado hakuna stoo. Andika kiasi ulicho nacho sasa, mfano: stoo mchele kilo 20\nBaada ya hapo, manunuzi na mauzo yenye kiasi (kilo, lita, vipande) yataongeza na kupunguza stoo yenyewe.',
+    stockUnknown: ex => `(andika kiasi kilichopo: ${ex})`,
+    stockDaysLeft: n => (n === 0 ? '(inaisha leo)' : `(inatosha siku ~${n})`),
+    stockLegend: '⚠️ = inakaribia kuisha',
+    stockSet: lines => `Sawa! Stoo sasa:\n${lines}`,
+    stockSkipped: list => `Sikuelewa: ${list}. Andika mfano: stoo mchele kilo 20`,
+    stockNotUnderstood: 'Samahani, sikuelewa. Andika mfano: stoo mchele kilo 20, au stoo soda 24. Kuona stoo yote, andika: stoo',
+    stockAlertSet: (item, level) => `Sawa! Nitakuambia stoo ya ${item} ikifika ${level} au chini.`,
+    stockAlertAuto: item => `Sawa! Nitakuambia stoo ya ${item} ikikaribia kuisha, kulingana na kasi ya mauzo yako.`,
+    stockLow: (item, qty) => `⚠️ Stoo ya ${item} inakaribia kuisha: imebaki ${qty}.`,
+    stockFinished: item => `⚠️ ${item}: stoo imeisha (kwa hesabu yako).`,
+    stockHint: (item, ex) => `📦 Ili nifuatilie stoo ya ${item}, andika kiasi kilichopo sasa, mfano: ${ex}`,
+    stockInvite: 'Kama una bidhaa stoo, niambie kiasi kilichopo, mfano: stoo mchele kilo 20',
+    reportLowStock: list => `⚠️ Stoo inakaribia kuisha: ${list}`,
     askPrice: (item, n, type) => `${item} ${n} kwa bei gani? Andika kwa mfano: ${type === 'purchase' ? 'nimenunua' : 'nimeuza'} ${item} ${n} kwa 3000`,
     consentPrompt: url => 'Karibu Mkoba! 👋 Nitakusaidia kuweka hesabu za biashara yako kupitia WhatsApp.\n\n'
       + 'Ili kufanya hivyo, Mkoba itahifadhi namba yako ya simu, jina lako, na rekodi unazotuma (mauzo, manunuzi, matumizi, madeni). '
@@ -131,6 +147,7 @@ const T = {
       '• Summary: today, yesterday, week, month, balance',
       '• Debts: Juma owes me 5000, I owe Juma 5000, Juma paid 2000',
       '• See debts: debts, or debt Juma',
+      '• Stock: stock (see), stock rice kilo 20 (set), stock rice below 5 (alert)',
       '• Evening report: STOP REPORTS / START REPORTS',
       '• Online dashboard: dashboard',
       '• Business statement (for loans): statement',
@@ -188,6 +205,21 @@ const T = {
     weeklyDebts: lines => `They owe you:\n${lines}`,
     statementReady: (days, url) => `Your business statement is ready (last 6 months). You can send this link to a lender or SACCO; it works for ${days} days:\n${url}\nTo close it early, send CLOSE STATEMENT.`,
     statementRevoked: 'Done, all links to your business statement are now closed.',
+    stockTitle: '📦 Your stock:',
+    stockEmpty: 'No stock yet. Send what you have now, e.g.: stock rice kilo 20\nAfter that, purchases and sales with a quantity (kilo, litre, pieces) add to and take from your stock automatically.',
+    stockUnknown: ex => `(send the amount you have: ${ex})`,
+    stockDaysLeft: n => (n === 0 ? '(runs out today)' : `(lasts ~${n} days)`),
+    stockLegend: '⚠️ = running low',
+    stockSet: lines => `Done! Stock now:\n${lines}`,
+    stockSkipped: list => `I didn't understand: ${list}. Send e.g.: stock rice kilo 20`,
+    stockNotUnderstood: "Sorry, I didn't understand. Send e.g.: stock rice kilo 20, or stock soda 24. To see all stock, send: stock",
+    stockAlertSet: (item, level) => `Done! I'll tell you when ${item} reaches ${level} or less.`,
+    stockAlertAuto: item => `Done! I'll tell you when ${item} is running low, based on how fast it sells.`,
+    stockLow: (item, qty) => `⚠️ ${item} is running low: ${qty} left.`,
+    stockFinished: item => `⚠️ ${item}: out of stock (by your records).`,
+    stockHint: (item, ex) => `📦 To track ${item} stock, send what you have now, e.g.: ${ex}`,
+    stockInvite: 'If you have goods in stock, tell me how much, e.g.: stock rice kilo 20',
+    reportLowStock: list => `⚠️ Running low: ${list}`,
     askPrice: (item, n, type) => `${n} ${item} for how much? Send for example: ${type === 'purchase' ? 'bought' : 'sold'} ${n} ${item} for 3000`,
     consentPrompt: url => "Welcome to Mkoba! 👋 I'll help you keep your business accounts on WhatsApp.\n\n"
       + 'To do that, Mkoba stores your phone number, your name, and the records you send (sales, purchases, expenses, debts). '
@@ -208,11 +240,11 @@ const t = lang => T[lang] || T.sw;
 const EN_WORDS = new Set(['sold', 'sell', 'sale', 'sales', 'bought', 'buy', 'purchase', 'purchased', 'paid', 'pay', 'spent',
   'expense', 'expenses', 'today', 'yesterday', 'week', 'month', 'balance', 'total', 'help', 'menu', 'undo', 'delete',
   'correct', 'edit', 'yes', 'no', 'owes', 'owe', 'lent', 'debts', 'debt', 'stop', 'start', 'reports', 'my', 'name', 'is',
-  'i', 'am', 'hello', 'hi', 'thanks', 'thank', 'you', 'for', 'the', 'of', 'and', 'skip', 'dashboard', 'fare', 'rent', 'flour']);
+  'i', 'am', 'hello', 'hi', 'thanks', 'thank', 'you', 'for', 'the', 'of', 'and', 'skip', 'dashboard', 'fare', 'rent', 'flour', 'stock', 'below', 'rice']);
 const SW_WORDS = new Set(['leo', 'jana', 'wiki', 'mwezi', 'salio', 'msaada', 'futa', 'rekebisha', 'badilisha', 'ndio', 'ndiyo',
   'hapana', 'habari', 'asante', 'naitwa', 'jina', 'langu', 'ni', 'kwa', 'ya', 'na', 'deni', 'madeni', 'ripoti', 'acha', 'anza',
   'dashibodi', 'shilingi', 'elfu', 'laki', 'mia', 'buku', 'mauzo', 'manunuzi', 'matumizi', 'gharama', 'nauli', 'kodi', 'unga',
-  'mchele', 'ruka', 'mambo', 'sawa', 'nauza', 'mimi', 'chakula', 'duka']);
+  'mchele', 'ruka', 'mambo', 'sawa', 'nauza', 'mimi', 'chakula', 'duka', 'stoo', 'stoki', 'chini']);
 // Swahili verb forms only (not names like Alice, Anastasia): ni/tu/wa + tense + stem, a/u + tense + known stem, debt verbs.
 const SW_VERB = /^(?:ni|tu|wa)(?:me|li|na|ta)[a-z]{3,}$|^(?:a|u)(?:me|li|na|ta)(?:ni|m)?(?:lipa|dai|kopa|rudish|nunua|uza|tumia|pata|pokea)[a-z]*$|^nam(?:dai|lipa|kopesha|rudishia)[a-z]*$/;
 

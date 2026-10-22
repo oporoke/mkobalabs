@@ -4,6 +4,7 @@ const { getSummaryRows, buildSummary } = require('./summary');
 const { fmtTsh } = require('./format');
 const { t } = require('./i18n');
 const { balanceRows } = require('./debts');
+const { lowItems, fmtQty } = require('./stock');
 
 const TZ = 'Africa/Dar_es_Salaam';
 const TEMPLATE = process.env.REPORT_TEMPLATE || 'mkoba_muhtasari';
@@ -70,7 +71,9 @@ async function sendReports(pool, wa, { forcePeriod } = {}) { // forcePeriod: tes
         const owed = (await balanceRows(pool, v.id)).filter(r => Number(r.balance) > 0).slice(0, 5);
         if (owed.length) debts = '\n\n' + L.weeklyDebts(owed.map(r => `- ${r.name} ${fmtTsh(r.balance)} (${L.daysOpen(Number(r.days))})`).join('\n'));
       }
-      res = await wa.sendText(v.phone_number, `${L.reportGreeting(displayName(v.name, v.language))}\n${await buildSummary(pool, v.id, period, v.language)}${debts}\n\n${L.reportFooter}`);
+      const low = await lowItems(pool, v.id);
+      const stock = low.length ? '\n\n' + L.reportLowStock(low.map(r => `${r.item} ${fmtQty(r.qty, r.unit)}`).join(', ')) : '';
+      res = await wa.sendText(v.phone_number, `${L.reportGreeting(displayName(v.name, v.language))}\n${await buildSummary(pool, v.id, period, v.language)}${debts}${stock}\n\n${L.reportFooter}`);
     } else {
       const t = totals(rows);
       res = await wa.sendTemplate(v.phone_number, TEMPLATE, TEMPLATE_LANG,

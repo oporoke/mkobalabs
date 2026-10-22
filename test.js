@@ -246,6 +246,29 @@ for (const [text, expected] of kinds) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  amountKind ${JSON.stringify(text).padEnd(31)} -> ${r}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length;
+// Stock commands
+const { parseStock } = require('./stock');
+const stk = [
+  ['stoo', { kind: 'list' }],
+  ['Stock', { kind: 'list' }],
+  ['stoo mchele kilo 20', { kind: 'count', items: [{ item: 'mchele', quantity: 20, unit: 'kg' }], bad: [] }],
+  ['stoo soda 24', { kind: 'count', items: [{ item: 'soda', quantity: 24, unit: '' }], bad: [] }],
+  ['stoo mafuta lita 5, sukari kilo 2', { kind: 'count', items: [{ item: 'mafuta', quantity: 5, unit: 'l' }, { item: 'sukari', quantity: 2, unit: 'kg' }], bad: [] }],
+  ['stoo\nmchele kilo 20\nsoda 24', { kind: 'count', items: [{ item: 'mchele', quantity: 20, unit: 'kg' }, { item: 'soda', quantity: 24, unit: '' }], bad: [] }],
+  ['stoo vipande 3 sabuni', { kind: 'count', items: [{ item: 'sabuni', quantity: 3, unit: '' }], bad: [] }],
+  ['stoo mchele 20000 tsh', { kind: 'count', items: [], bad: ['mchele 20000 tsh'] }],
+  ['stoo mchele chini ya 5', { kind: 'alert', item: 'mchele', level: 5 }],
+  ['stock rice below 3', { kind: 'alert', item: 'rice', level: 3 }],
+  ['stoo mchele chini ya auto', { kind: 'alert', item: 'mchele', level: null }],
+  ['nimeuza mchele kilo 2 kwa 5000', null],
+  ['stoopid', null],
+];
+for (const [text, expected] of stk) {
+  const r = parseStock(text);
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  stock ${JSON.stringify(text).padEnd(36)} -> ${JSON.stringify(r)}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

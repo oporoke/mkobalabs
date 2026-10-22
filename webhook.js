@@ -13,6 +13,7 @@ const { parseDashboardRequest, dashboardLinkReply } = require('./dashboard');
 const { mobileMoneyReply, transferChoiceReply, parseMobileMoney } = require('./mobilemoney');
 const { consentReply, deletionReply, privacyUrl } = require('./privacy');
 const { parseStatementCommand, statementReply } = require('./statement');
+const { parseStock, stockReply } = require('./stock');
 
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
@@ -108,6 +109,9 @@ async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
 
   const statement = parseStatementCommand(text);
   if (statement) return { handler: `statement:${statement}`, reply: await statementReply(pool, vendorId, statement, lang) };
+
+  const stock = parseStock(text);
+  if (stock) return { handler: `stock:${stock.kind}`, reply: await stockReply(pool, vendorId, stock, lang) };
 
   const correction = parseCorrection(text);
   if (correction) return { handler: `correction:${correction.action}`, reply: await correctionReply(pool, vendorId, correction, lang) };

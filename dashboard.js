@@ -7,6 +7,7 @@ const { esc, page } = require('./html');
 const { fmtTsh, describe } = require('./format');
 const { getSummaryRows } = require('./summary');
 const { balanceRows } = require('./debts');
+const { stockRows, fmtQty } = require('./stock');
 const { t } = require('./i18n');
 
 const TZ = 'Africa/Dar_es_Salaam';
@@ -155,8 +156,9 @@ router.get('/', async (req, res, next) => {
         <p>Tuma <b>dashibodi</b> kwenye WhatsApp ya Mkoba. Utapokea kiungo cha kuingia.</p></div>`));
     }
     const period = PERIODS[req.query.p] ? req.query.p : 'leo';
-    const [rows, days, recent, debts] = await Promise.all([
+    const [rows, days, recent, debts, stock] = await Promise.all([
       getSummaryRows(pool, vendor.id, period), dailyNet(vendor.id), recentEntries(vendor.id), balanceRows(pool, vendor.id),
+      stockRows(pool, vendor.id),
     ]);
     const get = t => Number(rows.find(r => r.type === t)?.total || 0);
     const sale = get('sale'), purchase = get('purchase'), expense = get('expense');
@@ -184,6 +186,12 @@ router.get('/', async (req, res, next) => {
         + (owing.length ? `<p class="debt-group">Wanaokudai</p>${debtList(owing, -1)}` : '')
       : `<p class="empty">Hakuna madeni. Andika kama <b>namdai Juma 5000</b> kuweka deni.</p>`;
 
+    const stockHtml = stock.length
+      ? `<ul class="debts">${stock.map(s => `<li><span>${esc(s.item)}${s.low ? ' ⚠️' : ''}</span><span class="num${s.low ? ' out' : ''}">${
+          s.known && s.qty >= 0 ? esc(fmtQty(s.qty, s.unit)) : '?'}</span></li>`).join('')}</ul>`
+        + (stock.some(s => s.low) ? '<p class="chart-note">⚠️ inakaribia kuisha</p>' : '')
+      : `<p class="empty">Bado hakuna stoo. Andika kama <b>stoo mchele kilo 20</b> kwenye WhatsApp.</p>`;
+
     res.send(page(name, `
       <div class="top"><h1>${esc(name)}</h1>
         <form method="post" action="/d/logout"><button class="link-btn" type="submit">Toka</button></form></div>
@@ -201,6 +209,7 @@ router.get('/', async (req, res, next) => {
       <p class="chart-note">Kijani ni faida, nyekundu ni hasara.</p>
       <h2>Rekodi za karibuni</h2>${entries}
       <h2>Madeni</h2>${debtHtml}
+      <h2>Stoo</h2>${stockHtml}
       <p class="foot"><a href="/faragha">Faragha na taarifa zako</a></p>`));
   } catch (err) { next(err); }
 });

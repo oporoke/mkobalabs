@@ -1,0 +1,41 @@
+Mkoba - latest files. Copy into ~/projects/mkobalabs keeping this folder layout.
+Not included (keep your own): package.json, package-lock.json, .env, migrations/001_initial.sql (dumped from your live DB).
+If your workflow file has a different name, replace its contents with .github/workflows/deploy.yml and delete the duplicate.
+
+Files:
+  .env.example
+  .github/workflows/deploy.yml
+  admin.js
+  app.js
+  corrections.js
+  dashboard.js
+  db.js
+  debts.js
+  ecosystem.config.js
+  feedback.js
+  format.js
+  html.js
+  i18n.js
+  index.js
+  ledger.js
+  log.js
+  migrate.js
+  migrations/002_add_indexes.sql
+  migrations/003_updated_at_triggers.sql
+  migrations/004_dashboard_auth.sql
+  migrations/005_vendor_language.sql
+  migrations/006_mobile_money.sql
+  migrations/007_privacy.sql
+  migrations/008_statement_links.sql
+  mobilemoney.js
+  onboarding.js
+  parser.js
+  privacy-page.js
+  privacy.js
+  reports.js
+  review.js
+  statement.js
+  summary.js
+  test.js
+  webhook.js
+  whatsapp.js
