@@ -441,6 +441,15 @@ for (const [text, q, u, amt] of spk) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  spoken ${JSON.stringify(text)} -> ${JSON.stringify([e.quantity, e.unit, e.amount])}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length + blk.length + 1 + hh.length + sc.length + lnd.length + dl.length + sel.length + vo.length + spk.length;
+// USSD amount typing
+const { parseAmount } = require('./ussd');
+const us = [['5000', 5000], ['5,000', 5000], ['5.000', 5000], ['abc', null], ['0', null], ['1500000', 1500000]];
+for (const [text, expected] of us) {
+  const r = parseAmount(text);
+  const ok = r === expected;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ussd amount ${JSON.stringify(text)} -> ${r}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length + blk.length + 1 + hh.length + sc.length + lnd.length + dl.length + sel.length + vo.length + spk.length + us.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

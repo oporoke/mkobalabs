@@ -58,6 +58,20 @@ app.get('/webhook', (req, res) => {
   res.sendStatus(403);
 });
 
+// USSD (roadmap #11), Africa's Talking callback. The secret in the path stops strangers from posting fake sessions.
+app.post('/ussd/:token', express.urlencoded({ extended: false, limit: '4kb' }), async (req, res) => {
+  const secret = process.env.USSD_TOKEN || '';
+  const given = String(req.params.token || '');
+  if (!secret || given.length !== secret.length || !require('crypto').timingSafeEqual(Buffer.from(given), Buffer.from(secret))) return res.sendStatus(404);
+  res.type('text/plain');
+  try {
+    res.send(await require('./ussd').handleUssd(pool, req.body || {}));
+  } catch (err) {
+    log.error('ussd_failed', { error: err.message, stack: err.stack });
+    res.send('END Samahani, kuna tatizo la mfumo. Jaribu tena baadaye.');
+  }
+});
+
 app.post('/webhook', async (req, res) => {
   if (!validSignature(req)) {
     log.warn('webhook_rejected', { ip: req.ip });
