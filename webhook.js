@@ -22,6 +22,7 @@ const { parseScore, scoreReply } = require('./score');
 const { parseLender, lenderReply } = require('./lender');
 const { parseRiderStart, riderByPhone, startRider, riderReply } = require('./delivery');
 const payments = require('./payments');
+const voice = require('./voice');
 
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
@@ -29,7 +30,7 @@ const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contac
 async function processWebhook(body) {
   const started = Date.now();
   const value = body.entry?.[0]?.changes?.[0]?.value;
-  const msg = value?.messages?.[0];
+  let msg = value?.messages?.[0];
 
   // Only handle traffic for this environment's own number (item 35). The Meta app has one webhook URL,
   // so messages to another number (e.g. the test number) also arrive here; they must not touch this database.
@@ -47,6 +48,27 @@ async function processWebhook(body) {
   let vendorId, lang = 'sw';
   try {
     const phone = msg.from;
+
+    // Voice notes (roadmap #10): turn the audio into text, show what was heard, then handle it like a typed message.
+    // Only for people already using Mkoba (agreed vendors/households, riders, customers in a shop), never before consent.
+    if (msg.type === 'audio' && msg.audio?.id && voice.configured()) {
+      const { rows: [who] } = await pool.query(
+        `SELECT COALESCE((SELECT language FROM vendors WHERE phone_number = $1 AND consent_at IS NOT NULL),
+                         (SELECT lang FROM riders WHERE phone = $1),
+                         (SELECT lang FROM customer_sessions WHERE phone = $1 AND expires_at > now())) AS lang,
+                (SELECT 1 FROM messages_log WHERE wa_message_id = $2) AS seen`, [phone, msg.id]);
+      if (who.lang && !who.seen) {
+        const vl = who.lang;
+        const r = await voice.transcribe(msg.audio.id, vl);
+        if (!r.ok) {
+          await logInbound(msg, null, phone);
+          await sendText(phone, voice.words(vl)[r.reason] || voice.words(vl).error);
+          return log.info('message_handled', { id: msg.id, handler: `voice_${r.reason}`, from: log.mask(phone), ms: Date.now() - started });
+        }
+        await sendText(phone, voice.words(vl).heard(r.text));
+        msg = { ...msg, type: 'text', text: { body: r.text }, voice: { confidence: r.confidence } };
+      }
+    }
 
     const custText = msg.type === 'text' ? msg.text?.body : null;
     const loc = msg.type === 'location' && msg.location?.latitude != null ? { lat: Number(msg.location.latitude), lng: Number(msg.location.longitude) } : null;
@@ -145,7 +167,7 @@ async function processWebhook(body) {
     }
     if (switchTo) return respond('language', L.languageSet);
 
-    const route = await routeText({ vendor, vendorId, messageId, text: msg.text.body, lang });
+    const route = await routeText({ vendor, vendorId, messageId, text: msg.text.body, lang, fromVoice: Boolean(msg.voice) });
     if (route) {
       // New shop orders the vendor has not been told about (they arrived outside WhatsApp's 24-hour window).
       // Plus notices kept for later (e.g. a closed bulk order), since WhatsApp only allows messages within 24 hours.
@@ -161,7 +183,7 @@ async function processWebhook(body) {
 
 // Decide which handler answers a text message. Order matters: earlier handlers win.
 // Returns { handler, reply }, or null when no reply should be sent.
-async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
+async function routeText({ vendor, vendorId, messageId, text, lang = 'sw', fromVoice = false }) {
   if (vendor.kind === 'household') return householdRoute(pool, { vendor, vendorId, messageId, text, lang });
   // Deletion works with or without consent; then nothing else runs until the vendor has agreed.
   const deletion = await deletionReply(pool, vendorId, text, lang);
@@ -226,7 +248,8 @@ async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
   const debt = await debtReply(pool, vendorId, messageId, text, lang);
   if (debt) return { handler: 'debt', reply: debt };
 
-  return { handler: 'ledger', reply: await recordEntries(pool, vendorId, messageId, text, lang) };
+  // Records from a voice note always wait for NDIO: a misheard amount must not be saved silently.
+  return { handler: 'ledger', reply: await recordEntries(pool, vendorId, messageId, text, lang, { confirm: fromVoice }) };
 }
 
 // Store the raw message once; returns its messages_log id, or null if it was a duplicate.

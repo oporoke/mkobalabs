@@ -119,6 +119,12 @@ function findMeasures(lower) {
     out.push({ quantity: parseFloat(m[1]), unit: MEASURE[m[2]], start: m.index, end: m.index + m[0].length });
   for (const m of lower.matchAll(new RegExp(`\\b(${MEASURE_WORDS})\\s+(\\d+(?:\\.\\d+)?)\\b`, 'g')))
     out.push({ quantity: parseFloat(m[2]), unit: MEASURE[m[1]], start: m.index, end: m.index + m[0].length });
+  // Spoken quantities (voice notes): "kilo tano" = 5 kg, "lita kumi na mbili" = 12 l
+  const NUM_WORD = [...Object.keys(UNITS), ...Object.keys(MULTS)].join('|');
+  for (const m of lower.matchAll(new RegExp(`\\b(${MEASURE_WORDS})\\s+((?:${NUM_WORD})(?:\\s+(?:na\\s+)?(?:${NUM_WORD}))*)\\b`, 'g'))) {
+    const q = parseWords(m[2].split(/\s+/));
+    if (q > 0) out.push({ quantity: q, unit: MEASURE[m[1]], start: m.index, end: m.index + m[0].length });
+  }
   return out;
 }
 

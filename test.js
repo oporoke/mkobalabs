@@ -415,6 +415,32 @@ sel.forEach(([fn, expected], i) => {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  selcom #${i + 1} -> ${JSON.stringify(r)}`);
 });
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length + blk.length + 1 + hh.length + sc.length + lnd.length + dl.length + sel.length;
+// Voice note helpers: Ogg/Opus header (sample rate) and duration from the last page
+const { oggInfo } = require('./voice');
+function fakeOgg(rate, granule) {
+  const head = Buffer.alloc(19); head.write('OpusHead', 0); head.writeUInt8(1, 8); head.writeUInt8(1, 9); head.writeUInt16LE(312, 10); head.writeUInt32LE(rate, 12);
+  const page = (g, body) => { const b = Buffer.alloc(27); b.write('OggS', 0); b.writeBigUInt64LE(BigInt(g), 6); return Buffer.concat([b, body]); };
+  return Buffer.concat([page(0, head), page(granule, Buffer.from('audio'))]);
+}
+const vo = [
+  [() => oggInfo(fakeOgg(16000, 48000 * 12 + 312)), { inputRate: 16000, seconds: 12 }],
+  [() => oggInfo(fakeOgg(48000, 48000 * 75 + 312)).seconds, 75],
+  [() => oggInfo(Buffer.from('not audio')), null],
+];
+vo.forEach(([fn, expected], i) => {
+  const r = fn();
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  voice #${i + 1} -> ${JSON.stringify(r)}`);
+});
+// Spoken quantities
+const spk = [['nimenunua mchele kilo tano kwa elfu kumi na tatu', 5, 'kg', 13000], ['nimeuza mafuta lita kumi na mbili kwa elfu ishirini', 12, 'l', 20000]];
+for (const [text, q, u, amt] of spk) {
+  const e = p(text);
+  const ok = e.quantity === q && e.unit === u && e.amount === amt;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  spoken ${JSON.stringify(text)} -> ${JSON.stringify([e.quantity, e.unit, e.amount])}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length + blk.length + 1 + hh.length + sc.length + lnd.length + dl.length + sel.length + vo.length + spk.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

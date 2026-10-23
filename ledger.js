@@ -51,7 +51,7 @@ async function applyPriceMemory(pool, vendorId, entries) {
   return entries;
 }
 
-async function recordEntries(pool, vendorId, messageId, text, lang = 'sw') {
+async function recordEntries(pool, vendorId, messageId, text, lang = 'sw', { confirm = false } = {}) {
   const entries = await applyPriceMemory(pool, vendorId, parseLedgerEntries(text));
   const unclear = entries.filter(e => e.confidence < SAVE_MIN);
   const askPrice = entries.find(e => e.askPrice);
@@ -63,7 +63,7 @@ async function recordEntries(pool, vendorId, messageId, text, lang = 'sw') {
     return t(lang).notUnderstood(what);
   }
 
-  const status = entries.some(e => e.confidence < CONFIRM_BELOW) ? 'pending' : 'confirmed';
+  const status = confirm || entries.some(e => e.confidence < CONFIRM_BELOW) ? 'pending' : 'confirmed';
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
