@@ -91,6 +91,10 @@ app.get('/faragha', secureHeaders, privacyPage('sw'));
 app.get('/privacy', secureHeaders, privacyPage('en'));
 
 // Web pages: vendor dashboard and admin.
+// Lite App (roadmap #12) under /d so the dashboard login cookie (path /d) works: /d/app and its API /d/api.
+const liteapp = require('./liteapp');
+app.use('/d/api', liteapp.api);
+app.use('/d', secureHeaders, liteapp.router);
 app.use('/d', secureHeaders, dashboard.router);
 app.use('/admin', secureHeaders, admin.router);
 app.use('/s', secureHeaders, statement.router); // business statements shared with lenders

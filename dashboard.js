@@ -213,6 +213,7 @@ router.get('/', async (req, res, next) => {
       <h2>Stoo</h2>${stockHtml}
       <h2>Alama ya Mkoba</h2>${sc.ready ? `<p><b class="num" style="font-size:1.6rem">${sc.score}/100</b> <span class="muted">– tuma <b>alama</b> kwenye WhatsApp kuona sehemu zake na jinsi ya kuiongeza.</span></p>`
         : `<p class="empty">Bado hakuna rekodi za kutosha (siku 14 zenye rekodi kwa siku 30). Endelea kuweka rekodi kila siku.</p>`}
+      <p><a class="btn" href="/d/app/" style="text-align:center;text-decoration:none">📱 Fungua programu ya Mkoba (inafanya kazi hata bila mtandao)</a></p>
       <p class="foot"><a href="/faragha">Faragha na taarifa zako</a></p>`));
   } catch (err) { next(err); }
 });
