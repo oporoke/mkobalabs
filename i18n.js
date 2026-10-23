@@ -38,6 +38,7 @@ const T = {
       '• Ripoti ya jioni: ACHA RIPOTI / ANZA RIPOTI',
       '• Dashibodi ya mtandaoni: dashibodi',
       '• Taarifa ya biashara (kwa mkopo): taarifa ya biashara',
+      '• Alama yako ya mkopo: alama',
       '• Kufuta rekodi ya mwisho: futa',
       '• Kubadilisha kiasi cha mwisho: rekebisha 6000',
       '• Lugha: english / kiswahili',
@@ -173,6 +174,7 @@ const T = {
       '• Evening report: STOP REPORTS / START REPORTS',
       '• Online dashboard: dashboard',
       '• Business statement (for loans): statement',
+      '• Your credit score: score',
       '• Delete the last entry: undo',
       '• Change the last amount: correct 6000',
       '• Language: kiswahili / english',
@@ -278,11 +280,11 @@ const t = lang => T[lang] || T.sw;
 const EN_WORDS = new Set(['sold', 'sell', 'sale', 'sales', 'bought', 'buy', 'purchase', 'purchased', 'paid', 'pay', 'spent',
   'expense', 'expenses', 'today', 'yesterday', 'week', 'month', 'balance', 'total', 'help', 'menu', 'undo', 'delete',
   'correct', 'edit', 'yes', 'no', 'owes', 'owe', 'lent', 'debts', 'debt', 'stop', 'start', 'reports', 'my', 'name', 'is',
-  'i', 'am', 'hello', 'hi', 'thanks', 'thank', 'you', 'for', 'the', 'of', 'and', 'skip', 'dashboard', 'fare', 'rent', 'flour', 'stock', 'below', 'rice', 'receipt', 'points', 'redeem', 'catalog', 'orders', 'order', 'accept', 'reject', 'complete', 'add', 'remove', 'groups', 'group', 'join', 'bulk', 'received', 'leave', 'create']);
+  'i', 'am', 'hello', 'hi', 'thanks', 'thank', 'you', 'for', 'the', 'of', 'and', 'skip', 'dashboard', 'fare', 'rent', 'flour', 'stock', 'below', 'rice', 'receipt', 'points', 'redeem', 'catalog', 'orders', 'order', 'accept', 'reject', 'complete', 'add', 'remove', 'groups', 'group', 'join', 'bulk', 'received', 'leave', 'create', 'score']);
 const SW_WORDS = new Set(['leo', 'jana', 'wiki', 'mwezi', 'salio', 'msaada', 'futa', 'rekebisha', 'badilisha', 'ndio', 'ndiyo',
   'hapana', 'habari', 'asante', 'naitwa', 'jina', 'langu', 'ni', 'kwa', 'ya', 'na', 'deni', 'madeni', 'ripoti', 'acha', 'anza',
   'dashibodi', 'shilingi', 'elfu', 'laki', 'mia', 'buku', 'mauzo', 'manunuzi', 'matumizi', 'gharama', 'nauli', 'kodi', 'unga',
-  'mchele', 'ruka', 'mambo', 'sawa', 'nauza', 'mimi', 'chakula', 'duka', 'stoo', 'stoki', 'chini', 'risiti', 'pointi', 'tumia', 'bidhaa', 'oda', 'kubali', 'kataa', 'maliza', 'ongeza', 'ondoa', 'imeisha', 'ipo', 'vikundi', 'kikundi', 'jiunge', 'jirani', 'imefika', 'unda']);
+  'mchele', 'ruka', 'mambo', 'sawa', 'nauza', 'mimi', 'chakula', 'duka', 'stoo', 'stoki', 'chini', 'risiti', 'pointi', 'tumia', 'bidhaa', 'oda', 'kubali', 'kataa', 'maliza', 'ongeza', 'ondoa', 'imeisha', 'ipo', 'vikundi', 'kikundi', 'jiunge', 'jirani', 'imefika', 'unda', 'alama']);
 // Swahili verb forms only (not names like Alice, Anastasia): ni/tu/wa + tense + stem, a/u + tense + known stem, debt verbs.
 const SW_VERB = /^(?:ni|tu|wa)(?:me|li|na|ta)[a-z]{3,}$|^(?:a|u)(?:me|li|na|ta)(?:ni|m)?(?:lipa|dai|kopa|rudish|nunua|uza|tumia|pata|pokea)[a-z]*$|^nam(?:dai|lipa|kopesha|rudishia)[a-z]*$/;
 

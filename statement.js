@@ -7,6 +7,7 @@ const pool = require('./db');
 const { esc, page } = require('./html');
 const { fmtTsh } = require('./format');
 const { t } = require('./i18n');
+const score = require('./score');
 
 const TZ = 'Africa/Dar_es_Salaam';
 const LINK_DAYS = 30;
@@ -60,6 +61,21 @@ const W = {
     gone: 'This link has expired or was closed by the business owner.', print: 'Print',
   },
 };
+// Mkoba score block for the statement (shown only when there is enough data).
+async function scoreHtml(vendorId, lang) {
+  const s = await score.computeScore(pool, vendorId);
+  const L = { sw: { h: 'Alama ya Mkoba', none: 'Bado hakuna rekodi za kutosha kwa alama (zinahitajika siku 14 zenye rekodi kwa siku 30).',
+                    how: 'Alama 0–100 kutoka rekodi za siku 90: kuweka rekodi kila siku 30, faida 25, mwenendo wa mauzo 15, muda wa kutumia Mkoba 15, madeni 10, rekodi zilizothibitishwa 5.' },
+              en: { h: 'Mkoba score', none: 'Not enough records for a score yet (14 days with records over 30 days are needed).',
+                    how: 'Score 0–100 from the last 90 days of records: recording every day 30, profit 25, sales trend 15, time using Mkoba 15, debts 10, verified records 5.' } }[lang];
+  if (!s.ready) return `<h2>${L.h}</h2><p class="note">${L.none}</p>`;
+  await score.saveSnapshot(pool, vendorId, s);
+  const labels = score.labels(lang);
+  return `<h2>${L.h}: ${s.score}/100 (${esc(score.grades(lang)[s.grade])})</h2>
+    <ul class="breakdown num">${Object.keys(score.MAX).map(k => `<li><span>${esc(labels[k])}</span><span>${s.parts[k]} / ${score.MAX[k]}</span></li>`).join('')}</ul>
+    <p class="note">${L.how}</p>`;
+}
+
 const maskPhone = p => String(p).replace(/^(\d{3})(\d{2})\d+(\d{3})$/, '+$1 $2x xxx $3');
 
 const router = express.Router();
@@ -142,6 +158,7 @@ router.get('/:token', async (req, res, next) => {
         <li><span>${w.vendorOwes}</span><span>${esc(fmtTsh(debt.vendor_owes))}</span></li>
         <li><span>${w.mmShare}</span><span>${pct(totals.mm, totals.entries)}</span></li>
       </ul>
+      ${await scoreHtml(link.vendor_id, lang)}
       <p class="note">${w.note}</p>
       <dl class="facts-list small num">
         <div><dt>${w.ref}</dt><dd>${ref}</dd></div>

@@ -353,6 +353,15 @@ hh.forEach(([fn, expected], i) => {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  household/delivery #${i + 1} -> ${JSON.stringify(r)}`);
 });
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length + blk.length + 1 + hh.length;
+// Score command
+const { parseScore } = require('./score');
+const sc = [['alama', true], ['Score', true], ['alama yangu', true], ['alama 5', false], ['nimeuza 5000', false]];
+for (const [text, expected] of sc) {
+  const r = parseScore(text);
+  const ok = r === expected;
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  score ${JSON.stringify(text).padEnd(36)} -> ${r}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length + blk.length + 1 + hh.length + sc.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

@@ -18,6 +18,7 @@ const { parseLoyalty, loyaltyReply } = require('./loyalty');
 const { parseVendorCatalog, vendorCatalogReply, parseShopOpen, activeSession, customerReply, pendingOrderNotice, isPastCustomer, customerHint } = require('./catalog');
 const { parseBulk, bulkReply, locationReply, takeNotices } = require('./bulk');
 const { parseHouseholdStart, startHousehold, householdRoute } = require('./household');
+const { parseScore, scoreReply } = require('./score');
 
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
@@ -162,6 +163,8 @@ async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
 
   const shop = parseVendorCatalog(text);
   if (shop) return { handler: `catalog:${shop.kind}`, reply: await vendorCatalogReply(pool, { sendText }, vendorId, messageId, shop, lang) };
+
+  if (parseScore(text)) return { handler: 'score', reply: await scoreReply(pool, vendorId, lang) };
 
   const bulk = parseBulk(text);
   if (bulk) return { handler: `bulk:${bulk.kind}`, reply: await bulkReply(pool, vendorId, messageId, bulk, lang) };

@@ -8,6 +8,7 @@ const { fmtTsh, describe } = require('./format');
 const { getSummaryRows } = require('./summary');
 const { balanceRows } = require('./debts');
 const { stockRows, fmtQty } = require('./stock');
+const { computeScore } = require('./score');
 const { t } = require('./i18n');
 
 const TZ = 'Africa/Dar_es_Salaam';
@@ -156,9 +157,9 @@ router.get('/', async (req, res, next) => {
         <p>Tuma <b>dashibodi</b> kwenye WhatsApp ya Mkoba. Utapokea kiungo cha kuingia.</p></div>`));
     }
     const period = PERIODS[req.query.p] ? req.query.p : 'leo';
-    const [rows, days, recent, debts, stock] = await Promise.all([
+    const [rows, days, recent, debts, stock, sc] = await Promise.all([
       getSummaryRows(pool, vendor.id, period), dailyNet(vendor.id), recentEntries(vendor.id), balanceRows(pool, vendor.id),
-      stockRows(pool, vendor.id),
+      stockRows(pool, vendor.id), computeScore(pool, vendor.id),
     ]);
     const get = t => Number(rows.find(r => r.type === t)?.total || 0);
     const sale = get('sale'), purchase = get('purchase'), expense = get('expense');
@@ -210,6 +211,8 @@ router.get('/', async (req, res, next) => {
       <h2>Rekodi za karibuni</h2>${entries}
       <h2>Madeni</h2>${debtHtml}
       <h2>Stoo</h2>${stockHtml}
+      <h2>Alama ya Mkoba</h2>${sc.ready ? `<p><b class="num" style="font-size:1.6rem">${sc.score}/100</b> <span class="muted">– tuma <b>alama</b> kwenye WhatsApp kuona sehemu zake na jinsi ya kuiongeza.</span></p>`
+        : `<p class="empty">Bado hakuna rekodi za kutosha (siku 14 zenye rekodi kwa siku 30). Endelea kuweka rekodi kila siku.</p>`}
       <p class="foot"><a href="/faragha">Faragha na taarifa zako</a></p>`));
   } catch (err) { next(err); }
 });

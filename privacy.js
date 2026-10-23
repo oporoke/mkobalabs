@@ -54,7 +54,7 @@ async function deleteVendorData(pool, vendorId) {
   const counts = {};
   try {
     await client.query('BEGIN');
-    for (const table of ['bulk_lines', 'vendor_notices', 'customer_sessions', 'orders', 'catalog_items', 'point_redemptions', 'receipts', 'stock_items', 'statement_links', 'login_tokens', 'sessions', 'report_log', 'parse_feedback', 'transactions', 'messages_log']) {
+    for (const table of ['credit_scores', 'bulk_lines', 'vendor_notices', 'customer_sessions', 'orders', 'catalog_items', 'point_redemptions', 'receipts', 'stock_items', 'statement_links', 'login_tokens', 'sessions', 'report_log', 'parse_feedback', 'transactions', 'messages_log']) {
       counts[table] = (await client.query(`DELETE FROM ${table} WHERE vendor_id = $1`, [vendorId])).rowCount;
     }
     await client.query('UPDATE collection_points SET created_by = NULL WHERE created_by = $1', [vendorId]); // the group stays for others
