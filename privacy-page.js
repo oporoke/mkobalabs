@@ -10,7 +10,7 @@ function body(lang) {
 <h1>Mkoba: how your data is used</h1>
 <p><a href="/faragha">Soma kwa Kiswahili</a></p>
 <h2>What we store</h2>
-<p>Your WhatsApp phone number, the name and type of business you give us, the messages you send to Mkoba, and the records made from them: sales, purchases, expenses, debts (including the names of people in your debt records), mobile-money messages you paste, your stock counts, the phone numbers of customers you send receipts to, with their purchases and points, your product list, and orders customers send you (their name, phone number and delivery location).</p>
+<p>Your WhatsApp phone number, the name and type of business you give us, the messages you send to Mkoba, and the records made from them: sales, purchases, expenses, debts (including the names of people in your debt records), mobile-money messages you paste, your stock counts, the phone numbers of customers you send receipts to, with their purchases and points, your product list, orders customers send you (their name, phone number and delivery location), your bulk-buy group and orders, and your location if you share it to find a collection point.</p>
 <h2>Why</h2>
 <p>Only to keep your business records and send you your summaries. We ask for your agreement before recording anything.</p>
 <h2>Who sees it</h2>
@@ -30,7 +30,7 @@ ${contact ? `<h2>Contact</h2><p>Questions about your data: ${esc(contact)}</p>` 
 <h1>Mkoba: jinsi taarifa zako zinavyotumika</h1>
 <p><a href="/privacy">Read in English</a></p>
 <h2>Tunachohifadhi</h2>
-<p>Namba yako ya WhatsApp, jina na aina ya biashara unayotupa, ujumbe unaotuma kwa Mkoba, na rekodi zinazotokana nao: mauzo, manunuzi, matumizi, madeni (pamoja na majina ya watu kwenye rekodi za madeni), ujumbe wa pesa ya simu unaobandika, hesabu za stoo, namba za simu za wateja unaowapa risiti pamoja na ununuzi na pointi zao, orodha ya bidhaa zako, na oda wanazotuma wateja (jina, namba ya simu na mahali pa kuletewa).</p>
+<p>Namba yako ya WhatsApp, jina na aina ya biashara unayotupa, ujumbe unaotuma kwa Mkoba, na rekodi zinazotokana nao: mauzo, manunuzi, matumizi, madeni (pamoja na majina ya watu kwenye rekodi za madeni), ujumbe wa pesa ya simu unaobandika, hesabu za stoo, namba za simu za wateja unaowapa risiti pamoja na ununuzi na pointi zao, orodha ya bidhaa zako, oda wanazotuma wateja (jina, namba ya simu na mahali pa kuletewa), kikundi chako cha kununua jumla na oda zake, na eneo lako ukilituma ili kupata sehemu ya kuchukua mzigo.</p>
 <h2>Kwa nini</h2>
 <p>Ili kuweka hesabu za biashara yako na kukutumia muhtasari wako tu. Tunaomba ukubali kabla ya kuhifadhi chochote.</p>
 <h2>Nani anaziona</h2>

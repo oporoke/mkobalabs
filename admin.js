@@ -36,6 +36,7 @@ function checkAuth(req, res, next) {
 
 const router = express.Router();
 router.use(checkAuth);
+router.use('/bulk', require('./bulk').adminRouter); // Jirani Bulk Buy: collection points, wholesale prices, group orders
 
 router.get('/', async (_req, res, next) => {
   try {
@@ -119,6 +120,7 @@ router.get('/', async (_req, res, next) => {
 
     res.send(page('Mkoba admin', `
       <h1>Mkoba admin</h1>
+      <p><a href="/admin/bulk">Jirani Bulk Buy: collection points, wholesale prices, group orders →</a></p>
       <div class="stats num">
         <div><b>${esc(s.vendors)}</b>vendors</div>
         <div><b>${esc(s.active_7d)}</b>active, 7 days</div>

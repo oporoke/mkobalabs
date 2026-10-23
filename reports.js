@@ -101,6 +101,11 @@ if (require.main === module) {
   const pool = require('./db');
   const wa = require('./whatsapp');
   sendReports(pool, wa)
-    .then(r => { console.log('Reports:', JSON.stringify(r)); return pool.end(); })
+    .then(async r => {
+      console.log('Reports:', JSON.stringify(r));
+      // Same evening run: close weekly bulk orders that are due (Friday) and tell members their share.
+      console.log('Bulk orders:', JSON.stringify(await require('./bulk').closeDueOrders(pool, wa)));
+      return pool.end();
+    })
     .catch(err => { console.error('Reports failed:', err.stack); process.exit(1); });
 }

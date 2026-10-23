@@ -318,6 +318,24 @@ for (const [text, expected] of shops) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  shop ${JSON.stringify(text).padEnd(37)} -> ${JSON.stringify(r)}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length;
+// Bulk-buy commands
+const { parseBulk, km } = require('./bulk');
+const blk = [
+  ['vikundi', { kind: 'groups' }], ['groups', { kind: 'groups' }], ['kikundi', { kind: 'group' }], ['toka kikundi', { kind: 'leave' }],
+  ['jirani', { kind: 'order' }], ['jirani imefika', { kind: 'received' }], ['bulk received', { kind: 'received' }],
+  ['jiunge Sinza', { kind: 'join', what: 'Sinza' }], ['jiunge na SIN01', { kind: 'join', what: 'SIN01' }], ['join group Kariakoo', { kind: 'join', what: 'Kariakoo' }],
+  ['unda kikundi Sinza Mori, Sinza', { kind: 'create', name: 'Sinza Mori', area: 'Sinza' }], ['unda kikundi Tegeta', { kind: 'create', name: 'Tegeta', area: 'Tegeta' }],
+  ['jirani mchele kilo 20', { kind: 'add', items: [{ item: 'mchele', quantity: 20, unit: 'kg' }] }], ['bulk soda 24', { kind: 'add', items: [{ item: 'soda', quantity: 24, unit: '' }] }],
+  ['jirani mchele kilo 10\nmafuta lita 5', { kind: 'add', items: [{ item: 'mchele', quantity: 10, unit: 'kg' }, { item: 'mafuta', quantity: 5, unit: 'l' }] }],
+  ['jirani ondoa mchele', { kind: 'remove', item: 'mchele' }], ['jirani mchele', { kind: 'badAdd' }], ['nimenunua mchele 5000', null],
+];
+for (const [text, expected] of blk) {
+  const r = parseBulk(text);
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  bulk ${JSON.stringify(text).padEnd(37)} -> ${JSON.stringify(r)}`);
+}
+{ const d = km(-6.7735, 39.2192, -6.7825, 39.2192); const ok = d > 0.9 && d < 1.1; if (!ok) fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  distance ~1 km -> ${d.toFixed(3)}`); }
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length + blk.length + 1;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

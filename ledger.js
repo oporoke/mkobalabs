@@ -4,6 +4,7 @@ const { savedMessage, listLines, fmtTsh } = require('./format');
 const { logFeedback } = require('./feedback');
 const { t } = require('./i18n');
 const { stockNotes } = require('./stock');
+const { bulkNotes } = require('./bulk');
 
 const SAVE_MIN = 0.6;      // below this: not understood, ask to resend
 const CONFIRM_BELOW = 0.8; // between SAVE_MIN and this: ask the vendor to confirm
@@ -92,7 +93,7 @@ async function recordEntries(pool, vendorId, messageId, text, lang = 'sw') {
     const hint = priced.length ? '\n' + priced.map(e => t(lang).priceHint(e.item, fmtTsh(e.unitPrice))).join('\n') : '';
     return t(lang).pending(listLines(entries, lang) + hint);
   }
-  return savedMessage(entries, lang) + await stockNotes(pool, vendorId, entries, lang);
+  return savedMessage(entries, lang) + await stockNotes(pool, vendorId, entries, lang) + await bulkNotes(pool, vendorId, entries, lang);
 }
 
 // Returns a reply if the text answers a pending question; null otherwise (caller continues).
@@ -116,7 +117,7 @@ async function confirmationReply(pool, vendorId, text, lang = 'sw') {
         RETURNING type, amount_tsh, item, quantity, unit`,
       [vendorId, latest.message_id]
     );
-    return savedMessage(rows.map(r => ({ ...r, amount: r.amount_tsh })), lang) + await stockNotes(pool, vendorId, rows, lang);
+    return savedMessage(rows.map(r => ({ ...r, amount: r.amount_tsh })), lang) + await stockNotes(pool, vendorId, rows, lang) + await bulkNotes(pool, vendorId, rows, lang);
   }
 
   const { rows: rejected } = await pool.query(

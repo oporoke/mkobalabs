@@ -16,6 +16,7 @@ const { parseStatementCommand, statementReply } = require('./statement');
 const { parseStock, stockReply } = require('./stock');
 const { parseLoyalty, loyaltyReply } = require('./loyalty');
 const { parseVendorCatalog, vendorCatalogReply, parseShopOpen, activeSession, customerReply, pendingOrderNotice, isPastCustomer, customerHint } = require('./catalog');
+const { parseBulk, bulkReply, locationReply, takeNotices } = require('./bulk');
 
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
@@ -97,6 +98,9 @@ async function processWebhook(body) {
     if (vendor.created) return respond('consent_prompt', L.consentPrompt(privacyUrl(lang)));
     if (!vendor.consent_at && msg.type !== 'text') return respond('consent_reminder', L.consentReminder(privacyUrl(lang)));
 
+    if (msg.type === 'location' && msg.location?.latitude != null) {
+      return respond('location', await locationReply(pool, vendorId, Number(msg.location.latitude), Number(msg.location.longitude), lang));
+    }
     if (msg.type !== 'text') {
       if (msg.type === 'audio') return respond('non_text', L.audioHint);
       if (HINT_TYPES.includes(msg.type)) return respond('non_text', L.textOnlyHint);
@@ -107,8 +111,9 @@ async function processWebhook(body) {
     const route = await routeText({ vendor, vendorId, messageId, text: msg.text.body, lang });
     if (route) {
       // New shop orders the vendor has not been told about (they arrived outside WhatsApp's 24-hour window).
-      const notice = vendor.consent_at ? await pendingOrderNotice(pool, vendorId, lang) : null;
-      return respond(route.handler, notice ? [].concat(route.reply, notice) : route.reply);
+      // Plus notices kept for later (e.g. a closed bulk order), since WhatsApp only allows messages within 24 hours.
+      const extra = vendor.consent_at ? [await pendingOrderNotice(pool, vendorId, lang), ...await takeNotices(pool, vendorId)].filter(Boolean) : [];
+      return respond(route.handler, [].concat(route.reply, extra));
     }
     return done('no_reply');
   } catch (err) {
@@ -142,6 +147,9 @@ async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
 
   const shop = parseVendorCatalog(text);
   if (shop) return { handler: `catalog:${shop.kind}`, reply: await vendorCatalogReply(pool, { sendText }, vendorId, messageId, shop, lang) };
+
+  const bulk = parseBulk(text);
+  if (bulk) return { handler: `bulk:${bulk.kind}`, reply: await bulkReply(pool, vendorId, messageId, bulk, lang) };
 
   const stock = parseStock(text);
   if (stock) return { handler: `stock:${stock.kind}`, reply: await stockReply(pool, vendorId, stock, lang) };
