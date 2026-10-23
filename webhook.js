@@ -14,6 +14,7 @@ const { mobileMoneyReply, transferChoiceReply, parseMobileMoney } = require('./m
 const { consentReply, deletionReply, privacyUrl } = require('./privacy');
 const { parseStatementCommand, statementReply } = require('./statement');
 const { parseStock, stockReply } = require('./stock');
+const { parseLoyalty, loyaltyReply } = require('./loyalty');
 
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
@@ -112,6 +113,9 @@ async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
 
   const stock = parseStock(text);
   if (stock) return { handler: `stock:${stock.kind}`, reply: await stockReply(pool, vendorId, stock, lang) };
+
+  const loyalty = parseLoyalty(text);
+  if (loyalty) return { handler: `loyalty:${loyalty.kind}`, reply: await loyaltyReply(pool, vendorId, messageId, loyalty, lang) };
 
   const correction = parseCorrection(text);
   if (correction) return { handler: `correction:${correction.action}`, reply: await correctionReply(pool, vendorId, correction, lang) };

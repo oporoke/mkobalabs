@@ -269,6 +269,26 @@ for (const [text, expected] of stk) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  stock ${JSON.stringify(text).padEnd(36)} -> ${JSON.stringify(r)}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length;
+// Receipts and points commands
+const { parseLoyalty } = require('./loyalty');
+const loy = [
+  ['risiti 0712345678 chips 5000', { kind: 'receipt', phone: '255712345678', text: 'chips 5000' }],
+  ['Risiti +255712345678 nimeuza soda 3 kwa 1800', { kind: 'receipt', phone: '255712345678', text: 'nimeuza soda 3 kwa 1800' }],
+  ['receipt 255654321098 rice 2000', { kind: 'receipt', phone: '255654321098', text: 'rice 2000' }],
+  ['pointi', { kind: 'points', phone: null }],
+  ['pointi 0712345678', { kind: 'points', phone: '255712345678' }],
+  ['tumia pointi 0712345678 20', { kind: 'redeem', phone: '255712345678', points: 20 }],
+  ['redeem 0712345678 5', { kind: 'redeem', phone: '255712345678', points: 5 }],
+  ['risiti chips 5000', { kind: 'help' }],
+  ['risiti 0812345678 chips 5000', { kind: 'help' }],
+  ['nimeuza chips 5000', null],
+];
+for (const [text, expected] of loy) {
+  const r = parseLoyalty(text);
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  loyalty ${JSON.stringify(text).padEnd(34)} -> ${JSON.stringify(r)}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

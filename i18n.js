@@ -32,6 +32,7 @@ const T = {
       '• Madeni: Juma ananidai 5000, namdai Juma 5000, Juma amelipa 2000, nimemlipa Juma 2000',
       '• Kuona madeni: madeni, au deni Juma',
       '• Stoo: stoo (kuona), stoo mchele kilo 20 (kuweka), stoo mchele chini ya 5 (tahadhari)',
+      '• Risiti kwa mteja: risiti 0712345678 chips 5000; pointi; tumia pointi 0712345678 20',
       '• Ripoti ya jioni: ACHA RIPOTI / ANZA RIPOTI',
       '• Dashibodi ya mtandaoni: dashibodi',
       '• Taarifa ya biashara (kwa mkopo): taarifa ya biashara',
@@ -104,6 +105,22 @@ const T = {
     stockHint: (item, ex) => `📦 Ili nifuatilie stoo ya ${item}, andika kiasi kilichopo sasa, mfano: ${ex}`,
     stockInvite: 'Kama una bidhaa stoo, niambie kiasi kilichopo, mfano: stoo mchele kilo 20',
     reportLowStock: list => `⚠️ Stoo inakaribia kuisha: ${list}`,
+    receiptHeader: (ref, shop) => `🧾 Risiti ${ref} – ${shop}`,
+    receiptTotal: amt => `Jumla: ${amt}`,
+    receiptPoints: (earned, total) => (earned ? `Pointi: +${earned} (jumla ${total})` : `Pointi zako: ${total}`),
+    receiptThanks: 'Asante kwa kununua!',
+    receiptSaved: (ref, amt, phone, earned, total) => `Sawa! Nimeongeza mauzo ${amt} na risiti ${ref} ya ${phone} (pointi +${earned}, jumla ${total}).\nTuma risiti inayofuata kwa mteja: bonyeza kwa muda mrefu, kisha "Sambaza".`,
+    receiptNotUnderstood: 'Samahani, sikuelewa risiti. Andika namba ya mteja kisha mauzo, mfano: risiti 0712345678 chips 5000',
+    receiptHelp: 'Risiti: risiti 0712345678 chips 5000\nPointi za mteja: pointi 0712345678\nWateja wote: pointi\nKutumia pointi: tumia pointi 0712345678 20',
+    pointsNone: phone => `${phone} hana risiti bado.`,
+    pointsOne: (phone, bal, visits, spent) => `${phone}: pointi ${bal} (ununuzi ${visits}, jumla ${spent}).`,
+    pointsEmpty: 'Bado hujatoa risiti. Andika mfano: risiti 0712345678 chips 5000',
+    pointsTitle: '⭐ Wateja wako (pointi):',
+    pointsLine: (bal, visits) => `pointi ${bal} (ununuzi ${visits})`,
+    redeemHelp: 'Andika mfano: tumia pointi 0712345678 20',
+    redeemTooMany: (phone, have) => `${phone} ana pointi ${have} tu.`,
+    redeemDone: (phone, used, left) => `Sawa! ${phone} ametumia pointi ${used}. Zimebaki ${left}.\nUnaweza kumtumia ujumbe unaofuata.`,
+    redeemCustomer: (shop, used, left) => `⭐ ${shop}: umetumia pointi ${used}. Zimebaki ${left}. Asante kwa kuwa mteja wetu!`,
     askPrice: (item, n, type) => `${item} ${n} kwa bei gani? Andika kwa mfano: ${type === 'purchase' ? 'nimenunua' : 'nimeuza'} ${item} ${n} kwa 3000`,
     consentPrompt: url => 'Karibu Mkoba! 👋 Nitakusaidia kuweka hesabu za biashara yako kupitia WhatsApp.\n\n'
       + 'Ili kufanya hivyo, Mkoba itahifadhi namba yako ya simu, jina lako, na rekodi unazotuma (mauzo, manunuzi, matumizi, madeni). '
@@ -148,6 +165,7 @@ const T = {
       '• Debts: Juma owes me 5000, I owe Juma 5000, Juma paid 2000',
       '• See debts: debts, or debt Juma',
       '• Stock: stock (see), stock rice kilo 20 (set), stock rice below 5 (alert)',
+      '• Customer receipt: receipt 0712345678 chips 5000; points; redeem 0712345678 20',
       '• Evening report: STOP REPORTS / START REPORTS',
       '• Online dashboard: dashboard',
       '• Business statement (for loans): statement',
@@ -220,6 +238,22 @@ const T = {
     stockHint: (item, ex) => `📦 To track ${item} stock, send what you have now, e.g.: ${ex}`,
     stockInvite: 'If you have goods in stock, tell me how much, e.g.: stock rice kilo 20',
     reportLowStock: list => `⚠️ Running low: ${list}`,
+    receiptHeader: (ref, shop) => `🧾 Receipt ${ref} – ${shop}`,
+    receiptTotal: amt => `Total: ${amt}`,
+    receiptPoints: (earned, total) => (earned ? `Points: +${earned} (total ${total})` : `Your points: ${total}`),
+    receiptThanks: 'Thank you for shopping with us!',
+    receiptSaved: (ref, amt, phone, earned, total) => `Done! Added a sale of ${amt} and receipt ${ref} for ${phone} (points +${earned}, total ${total}).\nSend the next message to the customer: press and hold it, then "Forward".`,
+    receiptNotUnderstood: "Sorry, I didn't understand the receipt. Send the customer's number then the sale, e.g.: receipt 0712345678 chips 5000",
+    receiptHelp: 'Receipt: receipt 0712345678 chips 5000\nA customer\'s points: points 0712345678\nAll customers: points\nUse points: redeem 0712345678 20',
+    pointsNone: phone => `${phone} has no receipts yet.`,
+    pointsOne: (phone, bal, visits, spent) => `${phone}: ${bal} points (${visits} purchases, total ${spent}).`,
+    pointsEmpty: 'No receipts yet. Send e.g.: receipt 0712345678 chips 5000',
+    pointsTitle: '⭐ Your customers (points):',
+    pointsLine: (bal, visits) => `${bal} points (${visits} purchases)`,
+    redeemHelp: 'Send e.g.: redeem 0712345678 20',
+    redeemTooMany: (phone, have) => `${phone} has only ${have} points.`,
+    redeemDone: (phone, used, left) => `Done! ${phone} used ${used} points. ${left} left.\nYou can forward the next message to them.`,
+    redeemCustomer: (shop, used, left) => `⭐ ${shop}: you used ${used} points. ${left} left. Thank you for being our customer!`,
     askPrice: (item, n, type) => `${n} ${item} for how much? Send for example: ${type === 'purchase' ? 'bought' : 'sold'} ${n} ${item} for 3000`,
     consentPrompt: url => "Welcome to Mkoba! 👋 I'll help you keep your business accounts on WhatsApp.\n\n"
       + 'To do that, Mkoba stores your phone number, your name, and the records you send (sales, purchases, expenses, debts). '
@@ -240,11 +274,11 @@ const t = lang => T[lang] || T.sw;
 const EN_WORDS = new Set(['sold', 'sell', 'sale', 'sales', 'bought', 'buy', 'purchase', 'purchased', 'paid', 'pay', 'spent',
   'expense', 'expenses', 'today', 'yesterday', 'week', 'month', 'balance', 'total', 'help', 'menu', 'undo', 'delete',
   'correct', 'edit', 'yes', 'no', 'owes', 'owe', 'lent', 'debts', 'debt', 'stop', 'start', 'reports', 'my', 'name', 'is',
-  'i', 'am', 'hello', 'hi', 'thanks', 'thank', 'you', 'for', 'the', 'of', 'and', 'skip', 'dashboard', 'fare', 'rent', 'flour', 'stock', 'below', 'rice']);
+  'i', 'am', 'hello', 'hi', 'thanks', 'thank', 'you', 'for', 'the', 'of', 'and', 'skip', 'dashboard', 'fare', 'rent', 'flour', 'stock', 'below', 'rice', 'receipt', 'points', 'redeem']);
 const SW_WORDS = new Set(['leo', 'jana', 'wiki', 'mwezi', 'salio', 'msaada', 'futa', 'rekebisha', 'badilisha', 'ndio', 'ndiyo',
   'hapana', 'habari', 'asante', 'naitwa', 'jina', 'langu', 'ni', 'kwa', 'ya', 'na', 'deni', 'madeni', 'ripoti', 'acha', 'anza',
   'dashibodi', 'shilingi', 'elfu', 'laki', 'mia', 'buku', 'mauzo', 'manunuzi', 'matumizi', 'gharama', 'nauli', 'kodi', 'unga',
-  'mchele', 'ruka', 'mambo', 'sawa', 'nauza', 'mimi', 'chakula', 'duka', 'stoo', 'stoki', 'chini']);
+  'mchele', 'ruka', 'mambo', 'sawa', 'nauza', 'mimi', 'chakula', 'duka', 'stoo', 'stoki', 'chini', 'risiti', 'pointi', 'tumia']);
 // Swahili verb forms only (not names like Alice, Anastasia): ni/tu/wa + tense + stem, a/u + tense + known stem, debt verbs.
 const SW_VERB = /^(?:ni|tu|wa)(?:me|li|na|ta)[a-z]{3,}$|^(?:a|u)(?:me|li|na|ta)(?:ni|m)?(?:lipa|dai|kopa|rudish|nunua|uza|tumia|pata|pokea)[a-z]*$|^nam(?:dai|lipa|kopesha|rudishia)[a-z]*$/;
 
