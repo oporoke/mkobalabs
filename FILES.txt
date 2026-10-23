@@ -1,24 +1,35 @@
-Mkoba - latest files. Copy into ~/projects/mkobalabs keeping this folder layout.
+Mkoba - all files as of 23 October 2026 (roadmap items 1-12 included). Copy into ~/projects/mkobalabs keeping this folder layout.
 Not included (keep your own): package.json, package-lock.json, .env, migrations/001_initial.sql (dumped from your live DB).
+No new npm packages are needed (express, pg, axios, dotenv as before).
+Database changes 009-018 are in migrations/ and are applied by `node migrate.js` (the GitHub deploy runs it).
+New settings are listed at the end of .env.example (Selcom, Google Speech-to-Text, USSD); everything works without them, those features just stay off.
 If your workflow file has a different name, replace its contents with .github/workflows/deploy.yml and delete the duplicate.
 
 Files:
   .env.example
   .github/workflows/deploy.yml
+  FILES.txt.new
   admin.js
   app.js
+  bulk.js
+  catalog.js
   corrections.js
   dashboard.js
   db.js
   debts.js
+  delivery.js
   ecosystem.config.js
   feedback.js
   format.js
+  household.js
   html.js
   i18n.js
   index.js
   ledger.js
+  lender.js
+  liteapp.js
   log.js
+  loyalty.js
   migrate.js
   migrations/002_add_indexes.sql
   migrations/003_updated_at_triggers.sql
@@ -27,15 +38,36 @@ Files:
   migrations/006_mobile_money.sql
   migrations/007_privacy.sql
   migrations/008_statement_links.sql
+  migrations/009_stock.sql
+  migrations/010_receipts.sql
+  migrations/011_catalog_orders.sql
+  migrations/012_bulk_buy.sql
+  migrations/013_households.sql
+  migrations/014_credit_scores.sql
+  migrations/015_lenders.sql
+  migrations/016_delivery.sql
+  migrations/017_payments.sql
+  migrations/018_lite_app.sql
   mobilemoney.js
   onboarding.js
   parser.js
+  payments.js
   privacy-page.js
   privacy.js
+  public/app/app.css
+  public/app/app.js
+  public/app/icon-192.png
+  public/app/icon-512.png
+  public/app/sw.js
   reports.js
   review.js
+  score.js
+  selcom.js
   statement.js
+  stock.js
   summary.js
   test.js
+  ussd.js
+  voice.js
   webhook.js
   whatsapp.js
