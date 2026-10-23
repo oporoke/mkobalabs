@@ -15,6 +15,7 @@ const { parseLoyalty } = require('./loyalty');
 const { parseVendorCatalog } = require('./catalog');
 const { parseBulk } = require('./bulk');
 const { parseScore } = require('./score');
+const { parseLender } = require('./lender');
 
 const WELCOME = t('sw').welcome; // kept for older callers; use t(lang).welcome
 const GREETINGS = new Set(['habari', 'mambo', 'hello', 'hi', 'hey', 'sasa', 'salama', 'poa', 'asante', 'shikamoo', 'vipi', 'niaje']);
@@ -26,7 +27,7 @@ const clean = t => String(t || '').toLowerCase().replace(/[^a-z\s'-]/g, ' ').rep
 // True if the text is something the bot should act on (entry, command, debt...), not an onboarding answer.
 function isActionable(text) {
   if (parseCommand(text) || parseCorrection(text) || parseConfirmation(text) || parseDebtQuery(text) || parseDebt(text)
-      || parseReportSetting(text) !== null || parseDashboardRequest(text) || parseLanguageSwitch(text) || parseMobileMoney(text) || parseStatementCommand(text) || parseStock(text) || parseLoyalty(text) || parseVendorCatalog(text) || parseBulk(text) || parseScore(text)) return true;
+      || parseReportSetting(text) !== null || parseDashboardRequest(text) || parseLanguageSwitch(text) || parseMobileMoney(text) || parseStatementCommand(text) || parseStock(text) || parseLoyalty(text) || parseVendorCatalog(text) || parseBulk(text) || parseScore(text) || parseLender(text)) return true;
   const entries = parseLedgerEntries(text);
   return entries.length > 0 && entries.every(e => e.confidence >= 0.6);
 }

@@ -362,6 +362,59 @@ for (const [text, expected] of sc) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  score ${JSON.stringify(text).padEnd(36)} -> ${r}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length + blk.length + 1 + hh.length + sc.length;
+// Lender commands and passwords
+const { parseLender, hashPassword, checkPassword } = require('./lender');
+const lnd = [
+  [() => parseLender('wakopeshaji'), { kind: 'list' }], [() => parseLender('ruhusa'), { kind: 'list' }],
+  [() => parseLender('ruhusu NMB'), { kind: 'grant', who: 'nmb', strict: false }],
+  [() => parseLender('ndio NMB'), { kind: 'grant', who: 'nmb', strict: true }],
+  [() => parseLender('kataa CRDB'), { kind: 'decline', who: 'crdb', strict: true }],
+  [() => parseLender('decline crdb'), { kind: 'decline', who: 'crdb', strict: false }],
+  [() => parseLender('ondoa ruhusa NMB'), { kind: 'revoke', who: 'nmb', strict: false }],
+  [() => parseLender('ndio'), null], [() => parseLender('nimeuza 5000'), null],
+  [() => { const h = hashPassword('s3cret'); return [checkPassword('s3cret', h), checkPassword('wrong', h)]; }, [true, false]],
+];
+lnd.forEach(([fn, expected], i) => {
+  const r = fn();
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  lender #${i + 1} -> ${JSON.stringify(r)}`);
+});
+// Delivery fee and rider commands
+const { quote, DEFAULTS, parseRiderCmd, parseRiderStart } = require('./delivery');
+const at = k => ({ lat: k / 111.195, lng: 0 }); // k km north of 0,0
+const dl = [
+  [() => quote(DEFAULTS, at(0), at(1.5)).fee, 2500], [() => quote(DEFAULTS, at(0), at(0.2)).fee, 1500],
+  [() => quote(DEFAULTS, at(0), at(7)).fee, 8000], [() => quote(DEFAULTS, at(0), { lat: null, lng: null }).fee, null],
+  [() => quote(DEFAULTS, at(0), at(1.5)).km, 1.9],
+  [() => parseRiderCmd('chukua 12'), { kind: 'take', id: 12 }], [() => parseRiderCmd('nimefikisha kazi #7'), { kind: 'delivered', id: 7 }],
+  [() => parseRiderCmd('picked 3'), { kind: 'picked', id: 3 }], [() => parseRiderCmd('kazi'), { kind: 'jobs' }], [() => parseRiderCmd('zima'), { kind: 'off' }],
+  [() => parseRiderCmd('habari'), null], [() => parseRiderStart('Boda'), 'sw'], [() => parseRiderStart('rider'), 'en'], [() => parseRiderStart('boda yangu'), null],
+];
+dl.forEach(([fn, expected], i) => {
+  const r = fn();
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  delivery #${i + 1} -> ${JSON.stringify(r)}`);
+});
+// Selcom signing and pay command
+const selcom = require('./selcom');
+const { parsePay } = require('./payments');
+process.env.SELCOM_API_KEY = 'key123'; process.env.SELCOM_API_SECRET = 'secret456';
+const hdr = selcom.headers({ vendor: 'TILL1', order_id: 'MKB1', amount: 5000 }, '2026-10-23T11:46:00+03:00');
+const expectDigest = require('crypto').createHmac('sha256', 'secret456').update('timestamp=2026-10-23T11:46:00+03:00&vendor=TILL1&order_id=MKB1&amount=5000').digest('base64');
+const sel = [
+  [() => hdr.Authorization, 'SELCOM ' + Buffer.from('key123').toString('base64')], [() => hdr['Signed-Fields'], 'vendor,order_id,amount'],
+  [() => hdr.Digest, expectDigest], [() => hdr['Digest-Method'], 'HS256'], [() => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+03:00$/.test(selcom.timestamp()), true],
+  [() => parsePay('LIPA'), true], [() => parsePay('pay'), true], [() => parsePay('lipa 5000'), false],
+];
+delete process.env.SELCOM_API_KEY; delete process.env.SELCOM_API_SECRET;
+sel.forEach(([fn, expected], i) => {
+  const r = fn();
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  selcom #${i + 1} -> ${JSON.stringify(r)}`);
+});
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length + blk.length + 1 + hh.length + sc.length + lnd.length + dl.length + sel.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

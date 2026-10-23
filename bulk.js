@@ -395,7 +395,11 @@ async function closeDueOrders(pool, wa) {
         mine.map(l => `- ${cap(l.item)} ${fmtQty(l.quantity, l.unit)}${l.price != null ? ` × ${fmtTsh(l.price)} = ${fmtTsh(Math.round(l.price * l.quantity))}` : ` – ${L.noPrice}`}`).join('\n'),
         mine.every(l => l.price != null) ? fmtTsh(mine.reduce((s, l) => s + Math.round(l.price * l.quantity), 0)) : null,
         whereText(v, g, L));
-      await notify(pool, wa, vendorId, v.phone_number, text) && notified++;
+      // Pay for the priced part of the share by phone (items without a price are settled later).
+      const due = mine.filter(l => l.price != null).reduce((s, l) => s + Math.round(l.price * l.quantity), 0);
+      const pay = due > 0 ? await require('./payments').createPayment(pool, { purpose: 'bulk', amount: due, phone: v.phone_number,
+        lang: v.language, bulk_order_id: o.id, member_id: vendorId, supplier_amount: due }) : null;
+      await notify(pool, wa, vendorId, v.phone_number, pay ? `${text}\n${require('./payments').payLine(pay, v.language)}` : text) && notified++;
     }
     log.info('bulk_order_closed', { point: g.code, lines: lines.length, vendors: byVendor.size });
   }
@@ -456,6 +460,8 @@ adminRouter.get('/', async (req, res, next) => {
         ${tot.length ? `<div class="scroll"><table><thead><tr><th>Item</th><th class="r">Quantity</th><th class="r">Vendors</th><th class="r">Price</th><th class="r">Value</th></tr></thead>
         <tbody>${tot.map(t => `<tr><td>${esc(cap(t.item))}</td><td class="r num">${esc(fmtQty(t.q, t.unit))}</td><td class="r num">${esc(t.n)}</td>
           <td class="r num">${price(t) != null ? esc(fmtTsh(price(t))) : '–'}</td><td class="r num">${price(t) != null ? esc(fmtTsh(Math.round(price(t) * t.q))) : '–'}</td></tr>`).join('')}</tbody></table></div>
+        ${o.status === 'closed' ? (o.arrived_at ? `<p class="note">Goods arrived at the point ${esc(new Date(o.arrived_at).toLocaleDateString('en-GB', { timeZone: TZ }))}; delivery jobs created for home/place members.</p>`
+          : `<form method="post" action="/admin/bulk/order/${o.id}/arrived"><button class="btn" type="submit" style="max-width:24rem">Goods arrived at ${esc(o.point)}: tell members, create delivery jobs</button></form>`) : ''}
         <details><summary>Per vendor</summary><table><tbody>${per.map(p => `<tr><td>${esc(p.name)}</td><td class="num">${esc(p.phone_number)}</td>
           <td>${p.kind === 'household' ? 'household' : 'vendor'}</td>
           <td>${esc(p.item)}</td><td class="r num">${esc(fmtQty(p.quantity, p.unit))}</td>
@@ -492,6 +498,32 @@ adminRouter.get('/', async (req, res, next) => {
         ${input('price', 'Wholesale price per unit (TSh)', 'required inputmode="numeric"')}
         <button class="btn" type="submit">Save product</button></form>
       <p class="note">Saving an existing product and unit updates its price. Prices are fixed on each order when it closes.</p>`, { wide: true }));
+  } catch (err) { next(err); }
+});
+
+// Goods for a closed order reached the collection point: tell members who collect there, and create boda jobs
+// for members who chose home or a named place.
+adminRouter.post('/order/:id/arrived', async (req, res, next) => {
+  try {
+    const pool = require('./db');
+    if (!/^\d+$/.test(req.params.id)) return res.sendStatus(404);
+    const { rows: [o] } = await pool.query(
+      `UPDATE bulk_orders SET arrived_at = now() WHERE id = $1 AND status = 'closed' AND arrived_at IS NULL RETURNING id, point_id`, [req.params.id]);
+    if (o) {
+      const wa = require('./whatsapp');
+      const g = await groupById(pool, o.point_id);
+      const { rows: collectors } = await pool.query(
+        `SELECT DISTINCT v.id, v.phone_number, v.language FROM bulk_lines l JOIN vendors v ON v.id = l.vendor_id
+          WHERE l.bulk_order_id = $1 AND (v.delivery_mode IS NULL OR v.delivery_mode = 'point')`, [o.id]);
+      for (const v of collectors) {
+        await notify(pool, wa, v.id, v.phone_number, v.language === 'en'
+          ? `📦 Your bulk goods have arrived at ${g.name}${g.area ? `, ${g.area}` : ''}. Collect them, then send: bulk received`
+          : `📦 Mzigo wako wa jumla umefika ${g.name}${g.area ? `, ${g.area}` : ''}. Uchukue, kisha andika: jirani imefika`);
+      }
+      const jobs = await require('./delivery').jobsForBulkOrder(pool, wa, o.id);
+      log.info('bulk_arrived', { order: o.id, collectors: collectors.length, jobs });
+    }
+    res.redirect(303, '/admin/bulk');
   } catch (err) { next(err); }
 });
 
@@ -534,4 +566,4 @@ adminRouter.post('/product/:id/:state', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-module.exports = { whereText, parseBulk, bulkReply, bulkNotes, locationReply, closeDueOrders, takeNotices, adminRouter, km };
+module.exports = { notify, whereText, parseBulk, bulkReply, bulkNotes, locationReply, closeDueOrders, takeNotices, adminRouter, km };

@@ -81,6 +81,8 @@ app.use('/d', secureHeaders, dashboard.router);
 app.use('/admin', secureHeaders, admin.router);
 app.use('/s', secureHeaders, statement.router); // business statements shared with lenders
 app.use('/k', secureHeaders, catalog.makeRouter(pool, wa)); // vendor catalogs: customers order on the web
+app.use('/l', secureHeaders, require('./lender').portal(pool, wa)); // lender portal: vendors' records with their permission
+app.use('/pay', secureHeaders, require('./payments').router(pool, wa)); // Selcom payment links and notifications
 
 // Errors from web pages: log, show a plain error page (no internal details).
 app.use((err, req, res, _next) => {

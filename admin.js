@@ -36,7 +36,10 @@ function checkAuth(req, res, next) {
 
 const router = express.Router();
 router.use(checkAuth);
-router.use('/bulk', require('./bulk').adminRouter); // Jirani Bulk Buy: collection points, wholesale prices, group orders
+router.use('/bulk', require('./bulk').adminRouter);
+router.use('/lenders', require('./lender').adminRouter); // lenders: add, password, switch off
+router.use('/riders', require('./delivery').adminRouter(require('./whatsapp'))); // boda riders, fees, deliveries
+router.use('/payments', require('./payments').adminRouter()); // Selcom payments, what is owed, payouts // Jirani Bulk Buy: collection points, wholesale prices, group orders
 
 router.get('/', async (_req, res, next) => {
   try {
@@ -122,7 +125,10 @@ router.get('/', async (_req, res, next) => {
 
     res.send(page('Mkoba admin', `
       <h1>Mkoba admin</h1>
-      <p><a href="/admin/bulk">Jirani Bulk Buy: collection points, wholesale prices, group orders →</a></p>
+      <p><a href="/admin/bulk">Jirani Bulk Buy: collection points, wholesale prices, group orders →</a><br>
+        <a href="/admin/lenders">Lenders: add lenders and their portal passwords →</a><br>
+        <a href="/admin/riders">Boda delivery: riders, delivery fee, deliveries →</a><br>
+        <a href="/admin/payments">Payments (Selcom): received, owed to vendors and riders →</a></p>
       <div class="stats num">
         <div><b>${esc(s.vendors)}</b>vendors</div>
         <div><b>${esc(s.active_7d)}</b>active, 7 days</div>

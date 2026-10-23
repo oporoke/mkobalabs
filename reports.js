@@ -105,6 +105,8 @@ if (require.main === module) {
       console.log('Reports:', JSON.stringify(r));
       // Same evening run: close weekly bulk orders that are due (Friday) and tell members their share.
       console.log('Bulk orders:', JSON.stringify(await require('./bulk').closeDueOrders(pool, wa)));
+      console.log('Score snapshots:', JSON.stringify(await require('./lender').snapshotScores(pool)));
+      console.log('Payments checked:', JSON.stringify(await require('./payments').checkPending(pool, wa)));
       return pool.end();
     })
     .catch(err => { console.error('Reports failed:', err.stack); process.exit(1); });

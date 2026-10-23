@@ -79,21 +79,10 @@ async function scoreHtml(vendorId, lang) {
 const maskPhone = p => String(p).replace(/^(\d{3})(\d{2})\d+(\d{3})$/, '+$1 $2x xxx $3');
 
 const router = express.Router();
-router.get('/:token', async (req, res, next) => {
-  try {
-    const { rows: [link] } = await pool.query(
-      `SELECT l.vendor_id, l.token_hash, to_char(l.expires_at AT TIME ZONE '${TZ}', 'DD/MM/YYYY') AS expires,
-              v.name, v.business_type, v.phone_number, v.language,
-              to_char((SELECT min(created_at) FROM transactions WHERE vendor_id = v.id AND deleted_at IS NULL) AT TIME ZONE '${TZ}', 'DD/MM/YYYY') AS since
-         FROM statement_links l JOIN vendors v ON v.id = l.vendor_id
-        WHERE l.token_hash = $1 AND l.revoked_at IS NULL AND l.expires_at > now()`,
-      [hash(req.params.token)]
-    );
-    const lang = req.query.lang === 'en' || req.query.lang === 'sw' ? req.query.lang : link?.language || 'sw';
-    const w = W[lang];
-    res.set('X-Robots-Tag', 'noindex');
-    if (!link) return res.status(404).send(page(w.title, `<div class="card"><h1>${w.title}</h1><p>${w.gone}</p></div>`));
-
+// The statement figures (facts, 6-month table, averages, debts, score), shared by the lender link (/s) and the lender portal.
+// v: { vendor_id, business_type, phone_number, since }. fullPhone: the lender portal shows the number (the vendor gave consent).
+async function statementBody(v, lang, { fullPhone = false } = {}) {
+  const w = W[lang];
     const { rows: months } = await pool.query(
       `WITH m AS (SELECT generate_series(date_trunc('month', now() AT TIME ZONE '${TZ}') - interval '5 months',
                                          date_trunc('month', now() AT TIME ZONE '${TZ}'), '1 month') AS month)
@@ -106,7 +95,7 @@ router.get('/:token', async (req, res, next) => {
            ON t.vendor_id = $1 AND t.deleted_at IS NULL AND t.status = 'confirmed' AND t.type IN ('sale', 'purchase', 'expense')
           AND date_trunc('month', t.created_at AT TIME ZONE '${TZ}') = m.month
         GROUP BY m.month ORDER BY m.month DESC`,
-      [link.vendor_id]
+      [v.vendor_id]
     );
     const { rows: [debt] } = await pool.query(
       `SELECT COALESCE(SUM(CASE WHEN b > 0 THEN b END), 0) AS owed_to_vendor, COALESCE(-SUM(CASE WHEN b < 0 THEN b END), 0) AS vendor_owes
@@ -114,7 +103,7 @@ router.get('/:token', async (req, res, next) => {
                                     WHEN 'credit_received' THEN -amount_tsh WHEN 'repayment_received' THEN -amount_tsh END) AS b
                  FROM transactions WHERE vendor_id = $1 AND deleted_at IS NULL AND status = 'confirmed' AND counterparty IS NOT NULL
                 GROUP BY lower(counterparty)) x`,
-      [link.vendor_id]
+      [v.vendor_id]
     );
     const { rows: [days] } = await pool.query(
       `SELECT (now() AT TIME ZONE '${TZ}')::date - (date_trunc('month', now() AT TIME ZONE '${TZ}') - interval '5 months')::date + 1 AS calendar_days`
@@ -131,16 +120,11 @@ router.get('/:token', async (req, res, next) => {
         <td class="r num">${esc(m.days)}</td></tr>`;
     }).join('');
     const totalProfit = totals.sales - totals.costs;
-    const name = /^\d+$/.test(link.name || '') ? '' : link.name;
-    const ref = link.token_hash.slice(0, 10).toUpperCase();
 
-    res.send(page(`${w.title}${name ? ` - ${name}` : ''}`, `
-      <div class="top"><p class="muted">${w.from}</p><a href="?lang=${w.otherLang}">${w.other}</a></div>
-      <h1 class="doc-title">${w.title}${name ? `: ${esc(name)}` : ''}</h1>
-      <dl class="facts-list">
-        ${link.business_type ? `<div><dt>${w.business}</dt><dd>${esc(link.business_type)}</dd></div>` : ''}
-        <div><dt>${w.phone}</dt><dd class="num">${esc(maskPhone(link.phone_number))}</dd></div>
-        ${link.since ? `<div><dt>${w.since}</dt><dd class="num">${esc(link.since)}</dd></div>` : ''}
+    return `      <dl class="facts-list">
+        ${v.business_type ? `<div><dt>${w.business}</dt><dd>${esc(v.business_type)}</dd></div>` : ''}
+        <div><dt>${w.phone}</dt><dd class="num">${esc(fullPhone ? '+' + v.phone_number : maskPhone(v.phone_number))}</dd></div>
+        ${v.since ? `<div><dt>${w.since}</dt><dd class="num">${esc(v.since)}</dd></div>` : ''}
         <div><dt>${w.period}</dt><dd>${MONTHS[lang][months[months.length - 1].mon - 1]} ${months[months.length - 1].yr} – ${MONTHS[lang][months[0].mon - 1]} ${months[0].yr}</dd></div>
       </dl>
       <p class="note">${w.inTsh}</p>
@@ -158,7 +142,31 @@ router.get('/:token', async (req, res, next) => {
         <li><span>${w.vendorOwes}</span><span>${esc(fmtTsh(debt.vendor_owes))}</span></li>
         <li><span>${w.mmShare}</span><span>${pct(totals.mm, totals.entries)}</span></li>
       </ul>
-      ${await scoreHtml(link.vendor_id, lang)}
+      ${await scoreHtml(v.vendor_id, lang)}`;
+}
+
+router.get('/:token', async (req, res, next) => {
+  try {
+    const { rows: [link] } = await pool.query(
+      `SELECT l.vendor_id, l.token_hash, to_char(l.expires_at AT TIME ZONE '${TZ}', 'DD/MM/YYYY') AS expires,
+              v.name, v.business_type, v.phone_number, v.language,
+              to_char((SELECT min(created_at) FROM transactions WHERE vendor_id = v.id AND deleted_at IS NULL) AT TIME ZONE '${TZ}', 'DD/MM/YYYY') AS since
+         FROM statement_links l JOIN vendors v ON v.id = l.vendor_id
+        WHERE l.token_hash = $1 AND l.revoked_at IS NULL AND l.expires_at > now()`,
+      [hash(req.params.token)]
+    );
+    const lang = req.query.lang === 'en' || req.query.lang === 'sw' ? req.query.lang : link?.language || 'sw';
+    const w = W[lang];
+    res.set('X-Robots-Tag', 'noindex');
+    if (!link) return res.status(404).send(page(w.title, `<div class="card"><h1>${w.title}</h1><p>${w.gone}</p></div>`));
+
+    const name = /^\d+$/.test(link.name || '') ? '' : link.name;
+    const ref = link.token_hash.slice(0, 10).toUpperCase();
+
+    res.send(page(`${w.title}${name ? ` - ${name}` : ''}`, `
+      <div class="top"><p class="muted">${w.from}</p><a href="?lang=${w.otherLang}">${w.other}</a></div>
+      <h1 class="doc-title">${w.title}${name ? `: ${esc(name)}` : ''}</h1>
+      ${await statementBody(link, lang)}
       <p class="note">${w.note}</p>
       <dl class="facts-list small num">
         <div><dt>${w.ref}</dt><dd>${ref}</dd></div>
@@ -168,4 +176,4 @@ router.get('/:token', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-module.exports = { router, parseStatementCommand, statementReply };
+module.exports = { router, parseStatementCommand, statementReply, statementBody };

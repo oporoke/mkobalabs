@@ -19,6 +19,9 @@ const { parseVendorCatalog, vendorCatalogReply, parseShopOpen, activeSession, cu
 const { parseBulk, bulkReply, locationReply, takeNotices } = require('./bulk');
 const { parseHouseholdStart, startHousehold, householdRoute } = require('./household');
 const { parseScore, scoreReply } = require('./score');
+const { parseLender, lenderReply } = require('./lender');
+const { parseRiderStart, riderByPhone, startRider, riderReply } = require('./delivery');
+const payments = require('./payments');
 
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
@@ -45,8 +48,25 @@ async function processWebhook(body) {
   try {
     const phone = msg.from;
 
-    // Customers (roadmap #3): "duka 4821" opens a shop; while that visit lasts, their messages go to the shop, not the ledger.
     const custText = msg.type === 'text' ? msg.text?.body : null;
+    const loc = msg.type === 'location' && msg.location?.latitude != null ? { lat: Number(msg.location.latitude), lng: Number(msg.location.longitude) } : null;
+
+    // Boda riders (roadmap #8): a rider's messages go to the rider flow; "boda" from a new number applies to be one.
+    const rider = await riderByPhone(pool, phone);
+    const riderStart = !rider && custText ? parseRiderStart(custText) : null;
+    if (rider || riderStart) {
+      const isVendor = riderStart && (await pool.query('SELECT 1 FROM vendors WHERE phone_number = $1', [phone])).rowCount;
+      if (!isVendor) {
+        const mid = await logInbound(msg, null, phone);
+        if (!mid) return log.info('duplicate_ignored', { id: msg.id });
+        const reply = rider ? await riderReply(pool, { sendText }, rider, custText, loc) : await startRider(pool, phone, riderStart);
+        if (reply) await sendText(phone, reply);
+        log.info('message_handled', { id: msg.id, handler: rider ? 'rider' : 'rider_start', from: log.mask(phone), ms: Date.now() - started });
+        return;
+      }
+    }
+
+    // Customers (roadmap #3): "duka 4821" opens a shop; while that visit lasts, their messages go to the shop, not the ledger.
     const open = custText ? parseShopOpen(custText) : null;
     const session = open ? null : await activeSession(pool, phone);
     // A customer who has ordered before (and is not a vendor) gets a shop hint instead of vendor sign-up,
@@ -56,7 +76,9 @@ async function processWebhook(body) {
     if (pastCustomer) {
       const mid = await logInbound(msg, null, phone);
       if (!mid) return log.info('duplicate_ignored', { id: msg.id });
-      await sendText(phone, await customerHint(pool, phone));
+      const pay = payments.parsePay(custText) ? await payments.payReply(pool, { sendText }, phone, /^\s*pay\b/i.test(custText) ? 'en' : 'sw') : null;
+      const hint = pay ?? await customerHint(pool, phone);
+      if (hint) await sendText(phone, hint);
       log.info('message_handled', { id: msg.id, handler: 'customer_hint', from: log.mask(phone), ms: Date.now() - started });
       return;
     }
@@ -75,7 +97,7 @@ async function processWebhook(body) {
     if (open || session) {
       const mid = await logInbound(msg, null, phone);
       if (!mid) return log.info('duplicate_ignored', { id: msg.id });
-      const reply = await customerReply(pool, { sendText }, phone, custText, session, open);
+      const reply = await customerReply(pool, { sendText }, phone, custText, session, open, loc);
       for (const part of [].concat(reply)) await sendText(phone, part);
       log.info('message_handled', { id: msg.id, handler: open ? 'shop_open' : 'customer', from: log.mask(phone), ms: Date.now() - started });
       return;
@@ -163,6 +185,17 @@ async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
 
   const shop = parseVendorCatalog(text);
   if (shop) return { handler: `catalog:${shop.kind}`, reply: await vendorCatalogReply(pool, { sendText }, vendorId, messageId, shop, lang) };
+
+  if (payments.parsePay(text)) {
+    const { rows: [me] } = await pool.query('SELECT phone_number FROM vendors WHERE id = $1', [vendorId]);
+    return { handler: 'pay', reply: (await payments.payReply(pool, { sendText }, me.phone_number, lang)) || [] };
+  }
+
+  const lender = parseLender(text);
+  if (lender) {
+    const reply = await lenderReply(pool, vendorId, lender, lang);
+    if (reply) return { handler: `lender:${lender.kind}`, reply };
+  }
 
   if (parseScore(text)) return { handler: 'score', reply: await scoreReply(pool, vendorId, lang) };
 

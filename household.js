@@ -69,6 +69,10 @@ async function householdRoute(pool, { vendor, vendorId, messageId, text, lang })
     await pool.query('UPDATE vendors SET name = COALESCE($2, name), onboarding_step = NULL WHERE id = $1', [vendorId, name]);
     if (name || parseBulk(text) === null) return { handler: 'household_onboarding', reply: L.help(name) };
   }
+  if (require('./payments').parsePay(text)) {
+    const { rows: [me] } = await pool.query('SELECT phone_number FROM vendors WHERE id = $1', [vendorId]);
+    return { handler: 'pay', reply: (await require('./payments').payReply(pool, require('./whatsapp'), me.phone_number, lang)) || [] };
+  }
   const bulk = parseBulk(text);
   if (bulk) return { handler: `household:${bulk.kind}`, reply: await bulkReply(pool, vendorId, messageId, bulk, lang) };
   const name = /^\d+$/.test(vendor.name || '') ? null : vendor.name;

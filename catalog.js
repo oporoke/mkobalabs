@@ -12,6 +12,7 @@ const { parseLedgerEntry } = require('./parser');
 const { fmtTsh } = require('./format');
 const { esc, page } = require('./html');
 const { stockNotes } = require('./stock');
+const payments = require('./payments');
 
 const SESSION_HOURS = 2;
 const WINDOW_HOURS = 23;
@@ -61,7 +62,8 @@ const W = {
     cart: (lines, total) => `🧺 Kikapu:\n${lines}\nJumla: ${total}\nKuagiza, andika TUMA. Kuongeza zaidi, andika namba na idadi.`,
     badPick: n => `Hakuna bidhaa namba ${n}. Andika MENYU kuona orodha.`,
     outPick: name => `${name} imeisha kwa sasa.`,
-    askDelivery: 'Andika jina lako na mahali pa kukuletea, mfano: Asha, Sinza Mori karibu na msikiti\nKama utakuja kuchukua mwenyewe, andika: CHUKUA Asha',
+    askDelivery: 'Andika jina lako na mahali pa kukuletea, mfano: Asha, Sinza Mori karibu na msikiti\nAu tuma location yako (📎 > Location) tukuletee hapo.\nKama utakuja kuchukua mwenyewe, andika: CHUKUA Asha',
+    pinned: '📍 location aliyotuma (ramani)',
     sent: (n, shop, total) => `✅ Oda #${n} imetumwa kwa ${shop}. Jumla: ${total}.\nMuuzaji atakujibu hapa. Asante!`,
     custAccepted: (n, shop) => `✅ ${shop} amekubali oda yako #${n}.`,
     custRejected: (n, shop) => `❌ Samahani, ${shop} hawezi kukamilisha oda yako #${n} kwa sasa.`,
@@ -105,7 +107,8 @@ const W = {
     cart: (lines, total) => `🧺 Cart:\n${lines}\nTotal: ${total}\nTo order, send ORDER. To add more, send number and quantity.`,
     badPick: n => `There is no product number ${n}. Send MENU to see the list.`,
     outPick: name => `${name} is sold out right now.`,
-    askDelivery: 'Send your name and where to deliver, e.g.: Asha, Sinza Mori near the mosque\nIf you will collect it yourself, send: PICKUP Asha',
+    askDelivery: 'Send your name and where to deliver, e.g.: Asha, Sinza Mori near the mosque\nOr share your location (📎 > Location) and we deliver there.\nIf you will collect it yourself, send: PICKUP Asha',
+    pinned: '📍 shared location (map)',
     sent: (n, shop, total) => `✅ Order #${n} sent to ${shop}. Total: ${total}.\nThe seller will reply here. Thank you!`,
     custAccepted: (n, shop) => `✅ ${shop} accepted your order #${n}.`,
     custRejected: (n, shop) => `❌ Sorry, ${shop} can't complete your order #${n} right now.`,
@@ -215,6 +218,30 @@ async function pendingOrderNotice(pool, vendorId, lang = 'sw') {
   return w(lang).pendingNotice(rows.map(o => '- ' + w(lang).orderLine({ ...o, total: Number(o.total) })).join('\n'), rows[0].number);
 }
 
+// Payment request for an accepted order: order total plus the delivery fee when it is known.
+// A web customer may already have paid the goods; then only the delivery fee is asked for.
+async function orderPayment(pool, wa, vendorId, o, lang, tell) {
+  if (!payments.enabled()) return '';
+  const { rows: [dl] } = await pool.query('SELECT id, fee FROM deliveries WHERE order_id = $1', [o.id]);
+  const fee = dl?.fee ? Number(dl.fee) : 0;
+  const { rows: [prev] } = await pool.query(`SELECT * FROM payments WHERE order_id = $1 AND status IN ('pending', 'paid') ORDER BY id DESC LIMIT 1`, [o.id]);
+  let pay;
+  if (prev?.status === 'paid') {
+    if (!fee) return '';
+    pay = await payments.createPayment(pool, { purpose: 'delivery', amount: fee, phone: o.customer_phone, name: o.customer_name,
+      lang: o.customer_lang, order_id: o.id, delivery_id: dl.id, rider_amount: fee });
+  } else {
+    if (prev) await pool.query(`UPDATE payments SET status = 'cancelled' WHERE id = $1`, [prev.id]);
+    pay = await payments.createPayment(pool, { purpose: 'order', amount: o.total + fee, phone: o.customer_phone, name: o.customer_name,
+      lang: o.customer_lang, order_id: o.id, delivery_id: dl?.id, vendor_id: vendorId, vendor_amount: o.total, rider_amount: fee, items: o.lines.length });
+  }
+  if (!pay) return '';
+  const sent = await tell(payments.payLine(pay, o.customer_lang || 'sw'));
+  return '\n' + (lang === 'en'
+    ? (sent ? `💳 The customer was sent a link to pay ${fmtTsh(pay.amount)} by phone.` : `💳 Give the customer this payment link: ${payments.payUrl(pay.ref)}`)
+    : (sent ? `💳 Mteja ametumiwa kiungo cha kulipa ${fmtTsh(pay.amount)} kwa simu.` : `💳 Mpe mteja kiungo hiki cha kulipa: ${payments.payUrl(pay.ref)}`));
+}
+
 // ---------- vendor commands ----------
 // -> null | { kind: 'list' } | { kind: 'add', parts } | { kind: 'remove'|'out'|'in', what } | { kind: 'orders' }
 //    | { kind: 'order', number } | { kind: 'accept'|'reject'|'complete', number }
@@ -306,10 +333,14 @@ async function vendorCatalogReply(pool, wa, vendorId, messageId, cmd, lang = 'sw
 
   if (cmd.kind === 'accept') {
     await pool.query(`UPDATE orders SET status = 'accepted', updated_at = now() WHERE id = $1`, [o.id]);
-    return L.vAccepted(o.number, await tell(w(custLang).custAccepted(o.number, shop))) + '\n' + L.whenDone(o.number);
+    const told = await tell(w(custLang).custAccepted(o.number, shop));
+    const boda = await require('./delivery').jobForOrder(pool, wa, vendorId, o, lang); // delivery orders get a rider job
+    return L.vAccepted(o.number, told) + boda + await orderPayment(pool, wa, vendorId, o, lang, tell) + '\n' + L.whenDone(o.number);
   }
   if (cmd.kind === 'reject') {
     await pool.query(`UPDATE orders SET status = 'rejected', updated_at = now() WHERE id = $1`, [o.id]);
+    await pool.query(`UPDATE payments SET status = 'cancelled' WHERE order_id = $1 AND status = 'pending'`, [o.id]);
+    await pool.query(`UPDATE payments SET note = 'refund needed: order rejected' WHERE order_id = $1 AND status = 'paid'`, [o.id]);
     return L.vRejected(o.number, await tell(w(custLang).custRejected(o.number, shop)));
   }
 
@@ -387,7 +418,7 @@ function cartText(cart, list, lang) {
 }
 
 // Handles a message from a customer (someone who opened a shop). Returns reply text(s).
-async function customerReply(pool, wa, phone, text, session, open) {
+async function customerReply(pool, wa, phone, text, session, open, loc = null) {
   if (open) {
     const { rows: [v] } = await pool.query('SELECT id FROM vendors WHERE shop_code = $1', [open.code]);
     const L = w(open.lang);
@@ -403,6 +434,15 @@ async function customerReply(pool, wa, phone, text, session, open) {
   const lang = session.lang, L = w(lang), n = norm(text);
   const list = await items(pool, session.vendor_id);
   const cart = session.cart || [];
+  if (loc && session.step === 'ask_delivery') {
+    // A shared WhatsApp location: deliver there (the map position lets Mkoba work out the delivery fee).
+    const o = await createOrder(pool, session.vendor_id, { phone, name: null, delivery: L.pinned, channel: 'whatsapp', cart });
+    await endSession(pool, phone);
+    if (!o) return L.cartEmpty;
+    await pool.query('UPDATE orders SET customer_lang = $2, drop_lat = $3, drop_lng = $4 WHERE id = $1', [o.id, lang, loc.lat, loc.lng]);
+    await notifyVendor(pool, wa, session.vendor_id, { ...o, delivery: L.pinned });
+    return L.sent(o.number, await shopName(pool, session.vendor_id), fmtTsh(o.total));
+  }
   if (text == null) return L.custHelp;
   if (is(n, 'exit')) { await endSession(pool, phone); return L.bye; }
   if (is(n, 'menu')) return menuLines(list, lang);
@@ -515,9 +555,14 @@ function makeRouter(pool, wa) {
       const o = await createOrder(pool, v.id, { phone: '255' + phoneM[1], name, delivery: deliver ? place : null, channel: 'web', cart });
       if (!o) return res.status(400).send(webForm(shop, req.params.code, list, 'Bidhaa ulizochagua zimeisha.', req.body));
       await notifyVendor(pool, wa, v.id, o);
+      // Web customers may pay right away (WhatsApp can't reach them later); the delivery fee is paid to the rider.
+      const pay = await payments.createPayment(pool, { purpose: 'order', amount: o.total, phone: o.customer_phone, name, lang: 'sw',
+        order_id: o.id, vendor_id: v.id, vendor_amount: o.total, items: o.lines.length });
       res.send(page('Oda imetumwa', `<div class="card"><h1>✅ Oda #${o.number} imetumwa</h1>
         <p>${esc(shop)} amepokea oda yako ya <b>${esc(fmtTsh(o.total))}</b>.</p>
-        <p>Muuzaji atawasiliana nawe kwa namba ${esc(showPhone(o.customer_phone))}.</p></div>`));
+        <p>Muuzaji atawasiliana nawe kwa namba ${esc(showPhone(o.customer_phone))}.</p>
+        ${pay ? `<p><a class="btn" style="text-align:center;text-decoration:none" href="/pay/${esc(pay.ref)}">Lipa ${esc(fmtTsh(o.total))} sasa kwa simu</a></p>
+          <p class="note">Au utalipa ukipokea. Oda ikikataliwa baada ya kulipa, utarudishiwa pesa.${deliver ? ' Usafiri utamlipa boda.' : ''}</p>` : ''}</div>`));
     } catch (err) { next(err); }
   });
   return router;
