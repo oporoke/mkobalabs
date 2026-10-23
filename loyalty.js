@@ -153,4 +153,4 @@ async function loyaltyReply(pool, vendorId, messageId, cmd, lang = 'sw') {
   return t(lang).receiptHelp;
 }
 
-module.exports = { parseLoyalty, loyaltyReply, normPhone, TSH_PER_POINT };
+module.exports = { parseLoyalty, loyaltyReply, normPhone, balance, TSH_PER_POINT };

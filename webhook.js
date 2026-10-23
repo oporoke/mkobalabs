@@ -15,6 +15,7 @@ const { consentReply, deletionReply, privacyUrl } = require('./privacy');
 const { parseStatementCommand, statementReply } = require('./statement');
 const { parseStock, stockReply } = require('./stock');
 const { parseLoyalty, loyaltyReply } = require('./loyalty');
+const { parseVendorCatalog, vendorCatalogReply, parseShopOpen, activeSession, customerReply, pendingOrderNotice, isPastCustomer, customerHint } = require('./catalog');
 
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
@@ -40,6 +41,30 @@ async function processWebhook(body) {
   let vendorId, lang = 'sw';
   try {
     const phone = msg.from;
+
+    // Customers (roadmap #3): "duka 4821" opens a shop; while that visit lasts, their messages go to the shop, not the ledger.
+    const custText = msg.type === 'text' ? msg.text?.body : null;
+    const open = custText ? parseShopOpen(custText) : null;
+    const session = open ? null : await activeSession(pool, phone);
+    // A customer who has ordered before (and is not a vendor) gets a shop hint instead of vendor sign-up,
+    // unless they ask to register their own business ("sajili").
+    const pastCustomer = !open && !session && !/^\s*(?:sajili|register)\s*$/i.test(custText || '') && await isPastCustomer(pool, phone);
+    if (pastCustomer) {
+      const mid = await logInbound(msg, null, phone);
+      if (!mid) return log.info('duplicate_ignored', { id: msg.id });
+      await sendText(phone, await customerHint(pool, phone));
+      log.info('message_handled', { id: msg.id, handler: 'customer_hint', from: log.mask(phone), ms: Date.now() - started });
+      return;
+    }
+    if (open || session) {
+      const mid = await logInbound(msg, null, phone);
+      if (!mid) return log.info('duplicate_ignored', { id: msg.id });
+      const reply = await customerReply(pool, { sendText }, phone, custText, session, open);
+      for (const part of [].concat(reply)) await sendText(phone, part);
+      log.info('message_handled', { id: msg.id, handler: open ? 'shop_open' : 'customer', from: log.mask(phone), ms: Date.now() - started });
+      return;
+    }
+
     const vendor = await getVendor(pool, phone);
     vendorId = vendor.id;
 
@@ -80,7 +105,11 @@ async function processWebhook(body) {
     if (switchTo) return respond('language', L.languageSet);
 
     const route = await routeText({ vendor, vendorId, messageId, text: msg.text.body, lang });
-    if (route) return respond(route.handler, route.reply);
+    if (route) {
+      // New shop orders the vendor has not been told about (they arrived outside WhatsApp's 24-hour window).
+      const notice = vendor.consent_at ? await pendingOrderNotice(pool, vendorId, lang) : null;
+      return respond(route.handler, notice ? [].concat(route.reply, notice) : route.reply);
+    }
     return done('no_reply');
   } catch (err) {
     log.error('message_failed', { id: msg.id, vendor: vendorId, error: err.message, stack: err.stack });
@@ -110,6 +139,9 @@ async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
 
   const statement = parseStatementCommand(text);
   if (statement) return { handler: `statement:${statement}`, reply: await statementReply(pool, vendorId, statement, lang) };
+
+  const shop = parseVendorCatalog(text);
+  if (shop) return { handler: `catalog:${shop.kind}`, reply: await vendorCatalogReply(pool, { sendText }, vendorId, messageId, shop, lang) };
 
   const stock = parseStock(text);
   if (stock) return { handler: `stock:${stock.kind}`, reply: await stockReply(pool, vendorId, stock, lang) };

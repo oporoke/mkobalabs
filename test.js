@@ -289,6 +289,35 @@ for (const [text, expected] of loy) {
   if (!ok) fail++;
   console.log(`${ok ? 'PASS' : 'FAIL'}  loyalty ${JSON.stringify(text).padEnd(34)} -> ${JSON.stringify(r)}`);
 }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length;
+// Catalog and orders commands
+const { parseVendorCatalog, parseShopOpen } = require('./catalog');
+const cat = [
+  ['bidhaa', { kind: 'list' }],
+  ['bidhaa ongeza chips 3000', { kind: 'add', parts: ['chips 3000'] }],
+  ['catalog add chips 3000, soda 600', { kind: 'add', parts: ['chips 3000', 'soda 600'] }],
+  ['bidhaa ondoa chips', { kind: 'remove', what: 'chips' }],
+  ['bidhaa imeisha 2', { kind: 'out', what: '2' }],
+  ['bidhaa ipo soda', { kind: 'in', what: 'soda' }],
+  ['oda', { kind: 'orders' }],
+  ['oda 12', { kind: 'order', number: 12 }],
+  ['kubali oda 12', { kind: 'accept', number: 12 }],
+  ['reject order 3', { kind: 'reject', number: 3 }],
+  ['maliza oda 4', { kind: 'complete', number: 4 }],
+  ['nimeuza chips 5000', null],
+];
+for (const [text, expected] of cat) {
+  const r = parseVendorCatalog(text);
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  catalog ${JSON.stringify(text).padEnd(34)} -> ${JSON.stringify(r)}`);
+}
+const shops = [['duka 4821', { code: '4821', lang: 'sw' }], ['Shop 123456', { code: '123456', lang: 'en' }], ['duka', null], ['duka 12', null]];
+for (const [text, expected] of shops) {
+  const r = parseShopOpen(text);
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  shop ${JSON.stringify(text).padEnd(37)} -> ${JSON.stringify(r)}`);
+}
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

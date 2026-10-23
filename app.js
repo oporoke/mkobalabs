@@ -10,6 +10,8 @@ const dashboard = require('./dashboard');
 const admin = require('./admin');
 const { privacyPage } = require('./privacy-page');
 const statement = require('./statement');
+const catalog = require('./catalog');
+const wa = require('./whatsapp');
 
 const state = { inFlight: 0, shuttingDown: false }; // read by index.js during shutdown
 
@@ -78,6 +80,7 @@ app.get('/privacy', secureHeaders, privacyPage('en'));
 app.use('/d', secureHeaders, dashboard.router);
 app.use('/admin', secureHeaders, admin.router);
 app.use('/s', secureHeaders, statement.router); // business statements shared with lenders
+app.use('/k', secureHeaders, catalog.makeRouter(pool, wa)); // vendor catalogs: customers order on the web
 
 // Errors from web pages: log, show a plain error page (no internal details).
 app.use((err, req, res, _next) => {
