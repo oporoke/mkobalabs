@@ -45,7 +45,8 @@ router.get('/', async (_req, res, next) => {
     const LIVE = `t.deleted_at IS NULL AND t.status = 'confirmed'`;
 
     const { rows: [s] } = await pool.query(`
-      SELECT (SELECT count(*) FROM vendors) AS vendors,
+      SELECT (SELECT count(*) FROM vendors WHERE kind = 'vendor') AS vendors,
+             (SELECT count(*) FROM vendors WHERE kind = 'household') AS households,
              (SELECT count(DISTINCT vendor_id) FROM messages_log WHERE created_at > now() - interval '7 days') AS active_7d,
              (SELECT count(DISTINCT vendor_id) FROM messages_log WHERE created_at > now() - interval '30 days') AS active_30d,
              (SELECT count(*) FROM vendors WHERE created_at > now() - interval '7 days') AS new_7d,
@@ -87,6 +88,7 @@ router.get('/', async (_req, res, next) => {
              (SELECT count(*) FROM transactions t WHERE t.vendor_id = v.id AND ${LIVE} AND t.created_at > now() - interval '30 days') AS entries_30d,
              (SELECT COALESCE(sum(amount_tsh), 0) FROM transactions t WHERE t.vendor_id = v.id AND t.type = 'sale' AND ${LIVE} AND t.created_at > now() - interval '30 days') AS sales_30d
         FROM vendors v
+       WHERE v.kind = 'vendor'
        ORDER BY (SELECT max(created_at) FROM messages_log m WHERE m.vendor_id = v.id) DESC NULLS LAST`);
 
     const { rows: feedback } = await pool.query(`
@@ -131,7 +133,7 @@ router.get('/', async (_req, res, next) => {
         <div><b>${esc(fmtTsh(s.sales_30d))}</b>sales recorded, 30 days</div>
         <div><b>${pct(tot('not_understood'), tot('text_messages'))}</b>not understood, 14 days</div>
       </div>
-      <p class="facts num">Still onboarding: ${esc(s.onboarding_open)}. Using English: ${esc(s.english)}.
+      <p class="facts num">Households (group buying): ${esc(s.households)}. Still onboarding: ${esc(s.onboarding_open)}. Using English: ${esc(s.english)}.
         Evening reports off: ${esc(s.reports_off)}. Mobile-money entries, 30 days: ${esc(s.mm_30d)}.
         Evening reports sent, 7 days: ${esc(s.reports_7d)}.</p>
 

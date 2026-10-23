@@ -49,7 +49,15 @@ const W = {
     removed: item => `Sawa, nimeondoa ${item} kwenye oda ya jumla.`,
     notInOrder: item => `${item} haipo kwenye oda yako ya jumla.`,
     addHelp: 'Andika mfano: jirani mchele kilo 20',
-    closedNotice: (g, lines, total, place) => `🧺 Oda ya jumla ya ${g} imefungwa. Sehemu yako:\n${lines}${total ? `\nJumla: ${total}` : ''}\nUtachukua: ${place}\nMzigo ukifika, andika: jirani imefika`,
+    closedNotice: (g, lines, total, where) => `🧺 Oda ya jumla ya ${g} imefungwa. Sehemu yako:\n${lines}${total ? `\nJumla: ${total}` : ''}\n${where}\nMzigo ukifika, andika: jirani imefika`,
+    whereGroup: p => `Utachukua: ${p}`,
+    whereHome: a => `Tutakuletea nyumbani: ${a}`,
+    wherePlace: p => `Utachukua: ${p}`,
+    deliveryNow: d => `Mzigo wako wa jumla: ${d}\nKubadilisha: pokea nyumbani <anwani>, pokea <mahali>, au pokea kikundi`,
+    deliverySet: d => `Sawa! ${d}`,
+    deliveryHelp: 'Andika mfano: pokea nyumbani Sinza Mori, nyumba namba 12 — au pokea Kanisa la Sinza — au pokea kikundi',
+    needDelivery: 'Kwanza niambie mahali pa kupokea mzigo wako:\n• Nyumbani: pokea nyumbani Sinza Mori, nyumba namba 12\n• Mahali fulani: pokea Kanisa la Sinza\n• Sehemu ya kikundi: pokea kikundi',
+    householdReceived: 'Asante! Mzigo umepokelewa.',
     nothingToReceive: 'Huna mzigo wa jumla unaosubiri.',
     received: 'Mzigo wa jumla umepokelewa.',
     noPriceReceived: items => `Hizi hazina bei, ziweke mwenyewe (mfano: nimenunua ${items[0]} kilo 20 kwa 46000): ${items.join(', ')}`,
@@ -83,7 +91,15 @@ const W = {
     removed: item => `Done, removed ${item} from the bulk order.`,
     notInOrder: item => `${item} is not in your bulk order.`,
     addHelp: 'Send e.g.: bulk rice kilo 20',
-    closedNotice: (g, lines, total, place) => `🧺 The ${g} bulk order is closed. Your share:\n${lines}${total ? `\nTotal: ${total}` : ''}\nCollect at: ${place}\nWhen the goods arrive, send: bulk received`,
+    closedNotice: (g, lines, total, where) => `🧺 The ${g} bulk order is closed. Your share:\n${lines}${total ? `\nTotal: ${total}` : ''}\n${where}\nWhen the goods arrive, send: bulk received`,
+    whereGroup: p => `Collect at: ${p}`,
+    whereHome: a => `We deliver to your home: ${a}`,
+    wherePlace: p => `Collect at: ${p}`,
+    deliveryNow: d => `Your bulk goods: ${d}\nTo change: deliver home <address>, deliver to <place>, or collect group`,
+    deliverySet: d => `Done! ${d}`,
+    deliveryHelp: 'Send e.g.: deliver home Sinza Mori, house 12 — or deliver to Sinza Church — or collect group',
+    needDelivery: 'First tell me where to receive your goods:\n• Home: deliver home Sinza Mori, house 12\n• A place: deliver to Sinza Church\n• The group point: collect group',
+    householdReceived: 'Thank you! Goods received.',
     nothingToReceive: 'You have no bulk goods waiting.',
     received: 'Bulk goods received.',
     noPriceReceived: items => `These have no price, record them yourself (e.g.: bought ${items[0]} kilo 20 for 46000): ${items.join(', ')}`,
@@ -103,7 +119,13 @@ function parseBulk(text) {
   if (['toka kikundi', 'leave group'].includes(n)) return { kind: 'leave' };
   if (['jirani', 'bulk'].includes(n)) return { kind: 'order' };
   if (['jirani imefika', 'bulk received', 'jirani nimepokea'].includes(n)) return { kind: 'received' };
-  let m = s.match(/^(?:jiunge|join)\s+(?:na\s+|kikundi\s+|group\s+)?(.+)$/i);
+  if (['pokea', 'delivery'].includes(n)) return { kind: 'delivery' };
+  if (['pokea kikundi', 'pokea kituoni', 'collect group', 'collect at group'].includes(n)) return { kind: 'setDelivery', mode: 'point' };
+  let m = s.match(/^(?:pokea\s+nyumbani|deliver\s+(?:to\s+)?home)\b[\s,:]*([\s\S]*)$/i);
+  if (m) return m[1].trim() ? { kind: 'setDelivery', mode: 'home', address: m[1].trim().slice(0, 200) } : { kind: 'deliveryHelp' };
+  m = s.match(/^(?:pokea|deliver\s+to)\s+([\s\S]+)$/i);
+  if (m) return { kind: 'setDelivery', mode: 'place', address: m[1].trim().slice(0, 200) };
+  m = s.match(/^(?:jiunge|join)\s+(?:na\s+|kikundi\s+|group\s+)?(.+)$/i);
   if (m) return { kind: 'join', what: m[1].trim() };
   m = s.match(/^(?:unda\s+kikundi|create\s+group)\s*(.*)$/i);
   if (m) {
@@ -208,6 +230,13 @@ async function orderReply(pool, vendorId, g, lang) {
   return [L.orderTitle(g.name, o.closes), L.groupTotal, ...lines].join('\n');
 }
 
+// Where a member receives their share: the group's point (default), home, or a place they named.
+function whereText(v, g, L) {
+  if (v.delivery_mode === 'home' && v.delivery_address) return L.whereHome(v.delivery_address);
+  if (v.delivery_mode === 'place' && v.delivery_address) return L.wherePlace(v.delivery_address);
+  return L.whereGroup(g ? `${g.name}${g.area ? `, ${g.area}` : ''}` : '–');
+}
+
 // ---------- vendor replies ----------
 async function bulkReply(pool, vendorId, messageId, cmd, lang = 'sw') {
   const L = w(lang);
@@ -230,7 +259,8 @@ async function bulkReply(pool, vendorId, messageId, cmd, lang = 'sw') {
     if (!rows.length) return L.none(cmd.what);
     if (!pick) return L.many(cmd.what, rows.map(g => '- ' + L.groupLine(g)).join('\n'));
     await pool.query('UPDATE vendors SET group_id = $2 WHERE id = $1', [vendorId, pick.id]);
-    return L.joined(pick);
+    const { rows: [k] } = await pool.query('SELECT kind, delivery_mode FROM vendors WHERE id = $1', [vendorId]);
+    return k.kind === 'household' && !k.delivery_mode ? `${L.joined(pick)}\n\n${L.needDelivery}` : L.joined(pick);
   }
   if (cmd.kind === 'create') {
     if (!cmd.name || cmd.name.length > 60) return L.createHelp;
@@ -243,7 +273,16 @@ async function bulkReply(pool, vendorId, messageId, cmd, lang = 'sw') {
   }
 
   const g = await vendorGroup(pool, vendorId);
-  if (cmd.kind === 'received') return receivedReply(pool, vendorId, messageId, lang);
+  const { rows: [me] } = await pool.query('SELECT kind, delivery_mode, delivery_address FROM vendors WHERE id = $1', [vendorId]);
+  if (cmd.kind === 'deliveryHelp') return L.deliveryHelp;
+  if (cmd.kind === 'delivery') return L.deliveryNow(whereText(me, g, L));
+  if (cmd.kind === 'setDelivery') {
+    const { rows: [v] } = await pool.query(
+      'UPDATE vendors SET delivery_mode = $2, delivery_address = $3 WHERE id = $1 RETURNING delivery_mode, delivery_address',
+      [vendorId, cmd.mode, cmd.mode === 'point' ? null : cmd.address]);
+    return L.deliverySet(whereText(v, g, L));
+  }
+  if (cmd.kind === 'received') return receivedReply(pool, vendorId, messageId, lang, me.kind === 'household');
   if (!g) return L.noGroup;
   if (cmd.kind === 'group') {
     const { rows: [{ n }] } = await pool.query('SELECT count(*) AS n FROM vendors WHERE group_id = $1', [g.id]);
@@ -258,6 +297,8 @@ async function bulkReply(pool, vendorId, messageId, cmd, lang = 'sw') {
   if (cmd.kind === 'order') return orderReply(pool, vendorId, g, lang);
   if (cmd.kind === 'badAdd') return L.addHelp;
   if (cmd.kind === 'add') {
+    // Each household says where it receives its goods (home or a place) before ordering.
+    if (me.kind === 'household' && !me.delivery_mode) return L.needDelivery;
     const o = await openOrder(pool, g.id, true);
     for (const it of cmd.items) {
       await pool.query(
@@ -277,12 +318,16 @@ async function bulkReply(pool, vendorId, messageId, cmd, lang = 'sw') {
 }
 
 // "jirani imefika": record the vendor's share of closed orders as purchases (at the closing price).
-async function receivedReply(pool, vendorId, messageId, lang) {
+async function receivedReply(pool, vendorId, messageId, lang, household = false) {
   const L = w(lang);
   const { rows } = await pool.query(
     `SELECT l.id, l.item, l.unit, l.quantity, l.price FROM bulk_lines l JOIN bulk_orders o ON o.id = l.bulk_order_id
       WHERE l.vendor_id = $1 AND o.status = 'closed' AND l.received_at IS NULL ORDER BY l.id`, [vendorId]);
   if (!rows.length) return L.nothingToReceive;
+  if (household) { // households keep no business records: just mark it received
+    await pool.query('UPDATE bulk_lines SET received_at = now() WHERE id = ANY($1::bigint[])', [rows.map(r => r.id)]);
+    return L.householdReceived;
+  }
   const priced = rows.filter(r => r.price != null), unpriced = rows.filter(r => r.price == null);
   const entries = priced.map(r => ({ type: 'purchase', item: r.item, quantity: Number(r.quantity), unit: r.unit || null,
     amount: Math.round(Number(r.price) * Number(r.quantity)) }));
@@ -344,12 +389,12 @@ async function closeDueOrders(pool, wa) {
     const byVendor = new Map();
     for (const l of lines) byVendor.set(l.vendor_id, [...(byVendor.get(l.vendor_id) || []), l]);
     for (const [vendorId, mine] of byVendor) {
-      const { rows: [v] } = await pool.query('SELECT phone_number, language FROM vendors WHERE id = $1', [vendorId]);
+      const { rows: [v] } = await pool.query('SELECT phone_number, language, delivery_mode, delivery_address FROM vendors WHERE id = $1', [vendorId]);
       const L = w(v.language);
       const text = L.closedNotice(g.name,
         mine.map(l => `- ${cap(l.item)} ${fmtQty(l.quantity, l.unit)}${l.price != null ? ` × ${fmtTsh(l.price)} = ${fmtTsh(Math.round(l.price * l.quantity))}` : ` – ${L.noPrice}`}`).join('\n'),
         mine.every(l => l.price != null) ? fmtTsh(mine.reduce((s, l) => s + Math.round(l.price * l.quantity), 0)) : null,
-        `${g.name}${g.area ? `, ${g.area}` : ''}`);
+        whereText(v, g, L));
       await notify(pool, wa, vendorId, v.phone_number, text) && notified++;
     }
     log.info('bulk_order_closed', { point: g.code, lines: lines.length, vendors: byVendor.size });
@@ -404,7 +449,7 @@ adminRouter.get('/', async (req, res, next) => {
         `SELECT item_key, unit, min(item) AS item, SUM(quantity) AS q, COUNT(DISTINCT vendor_id) AS n, max(price) AS price
            FROM bulk_lines WHERE bulk_order_id = $1 GROUP BY item_key, unit ORDER BY 3`, [o.id]);
       const { rows: per } = await pool.query(
-        `SELECT v.name, v.phone_number, l.item, l.unit, l.quantity, l.received_at IS NOT NULL AS got
+        `SELECT v.name, v.phone_number, v.kind, v.delivery_mode, v.delivery_address, l.item, l.unit, l.quantity, l.received_at IS NOT NULL AS got
            FROM bulk_lines l JOIN vendors v ON v.id = l.vendor_id WHERE l.bulk_order_id = $1 ORDER BY v.name, l.item`, [o.id]);
       const price = t => (t.price != null ? Number(t.price) : prices[`${t.item_key}|${t.unit}`]);
       orderHtml.push(`<h3>${esc(o.point)} (${esc(o.code)}) – ${esc(o.status)}, closes ${esc(o.closes)}</h3>
@@ -412,7 +457,10 @@ adminRouter.get('/', async (req, res, next) => {
         <tbody>${tot.map(t => `<tr><td>${esc(cap(t.item))}</td><td class="r num">${esc(fmtQty(t.q, t.unit))}</td><td class="r num">${esc(t.n)}</td>
           <td class="r num">${price(t) != null ? esc(fmtTsh(price(t))) : '–'}</td><td class="r num">${price(t) != null ? esc(fmtTsh(Math.round(price(t) * t.q))) : '–'}</td></tr>`).join('')}</tbody></table></div>
         <details><summary>Per vendor</summary><table><tbody>${per.map(p => `<tr><td>${esc(p.name)}</td><td class="num">${esc(p.phone_number)}</td>
-          <td>${esc(p.item)}</td><td class="r num">${esc(fmtQty(p.quantity, p.unit))}</td><td>${p.got ? 'received' : ''}</td></tr>`).join('')}</tbody></table></details>`
+          <td>${p.kind === 'household' ? 'household' : 'vendor'}</td>
+          <td>${esc(p.item)}</td><td class="r num">${esc(fmtQty(p.quantity, p.unit))}</td>
+          <td>${esc(p.delivery_mode === 'home' ? `Home: ${p.delivery_address}` : p.delivery_mode === 'place' ? `At: ${p.delivery_address}` : 'Group point')}</td>
+          <td>${p.got ? 'received' : ''}</td></tr>`).join('')}</tbody></table></details>`
         : '<p class="note">No lines yet.</p>'}`);
     }
     res.send(page('Mkoba bulk buy', `
@@ -486,4 +534,4 @@ adminRouter.post('/product/:id/:state', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-module.exports = { parseBulk, bulkReply, bulkNotes, locationReply, closeDueOrders, takeNotices, adminRouter, km };
+module.exports = { whereText, parseBulk, bulkReply, bulkNotes, locationReply, closeDueOrders, takeNotices, adminRouter, km };

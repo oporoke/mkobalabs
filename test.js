@@ -336,6 +336,23 @@ for (const [text, expected] of blk) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  bulk ${JSON.stringify(text).padEnd(37)} -> ${JSON.stringify(r)}`);
 }
 { const d = km(-6.7735, 39.2192, -6.7825, 39.2192); const ok = d > 0.9 && d < 1.1; if (!ok) fail++; console.log(`${ok ? 'PASS' : 'FAIL'}  distance ~1 km -> ${d.toFixed(3)}`); }
-const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length + blk.length + 1;
+// Household start and delivery choices
+const { parseHouseholdStart } = require('./household');
+const hh = [
+  [() => parseHouseholdStart('nyumbani'), 'sw'], [() => parseHouseholdStart('Household'), 'en'], [() => parseHouseholdStart('nyumbani kwangu'), null],
+  [() => parseBulk('pokea nyumbani Sinza Mori, nyumba 12'), { kind: 'setDelivery', mode: 'home', address: 'Sinza Mori, nyumba 12' }],
+  [() => parseBulk('pokea Kanisa la Sinza'), { kind: 'setDelivery', mode: 'place', address: 'Kanisa la Sinza' }],
+  [() => parseBulk('pokea kikundi'), { kind: 'setDelivery', mode: 'point' }],
+  [() => parseBulk('deliver home Mikocheni B'), { kind: 'setDelivery', mode: 'home', address: 'Mikocheni B' }],
+  [() => parseBulk('deliver to Sinza Church'), { kind: 'setDelivery', mode: 'place', address: 'Sinza Church' }],
+  [() => parseBulk('pokea nyumbani'), { kind: 'deliveryHelp' }], [() => parseBulk('pokea'), { kind: 'delivery' }],
+];
+hh.forEach(([fn, expected], i) => {
+  const r = fn();
+  const ok = JSON.stringify(r) === JSON.stringify(expected);
+  if (!ok) fail++;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  household/delivery #${i + 1} -> ${JSON.stringify(r)}`);
+});
+const total = cases.length + multi.length + cmds.length + corr.length + conf.length + items.length + debts.length + dq.length + names.length + biz.length + rep.length + typos.length + 1 + dash.length + mmCases.length + priv.length + st.length + kinds.length + stk.length + loy.length + cat.length + shops.length + blk.length + 1 + hh.length;
 console.log(`\n${total - fail}/${total} passed`);
 process.exit(fail ? 1 : 0);

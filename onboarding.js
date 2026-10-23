@@ -52,7 +52,7 @@ async function getVendor(pool, phone) {
     `INSERT INTO vendors (phone_number, name, onboarded_via, onboarding_step)
      VALUES ($1, $1, 'whatsapp', 'ask_name')
      ON CONFLICT (phone_number) DO UPDATE SET phone_number = EXCLUDED.phone_number
-     RETURNING id, name, onboarding_step, language, consent_at, (xmax = 0) AS created`,
+     RETURNING id, name, onboarding_step, language, consent_at, kind, (xmax = 0) AS created`,
     [phone]
   );
   return v;

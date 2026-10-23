@@ -17,6 +17,7 @@ const { parseStock, stockReply } = require('./stock');
 const { parseLoyalty, loyaltyReply } = require('./loyalty');
 const { parseVendorCatalog, vendorCatalogReply, parseShopOpen, activeSession, customerReply, pendingOrderNotice, isPastCustomer, customerHint } = require('./catalog');
 const { parseBulk, bulkReply, locationReply, takeNotices } = require('./bulk');
+const { parseHouseholdStart, startHousehold, householdRoute } = require('./household');
 
 const HINT_TYPES = ['image', 'video', 'document', 'sticker', 'location', 'contacts'];
 
@@ -49,13 +50,26 @@ async function processWebhook(body) {
     const session = open ? null : await activeSession(pool, phone);
     // A customer who has ordered before (and is not a vendor) gets a shop hint instead of vendor sign-up,
     // unless they ask to register their own business ("sajili").
-    const pastCustomer = !open && !session && !/^\s*(?:sajili|register)\s*$/i.test(custText || '') && await isPastCustomer(pool, phone);
+    const pastCustomer = !open && !session && !/^\s*(?:sajili|register)\s*$/i.test(custText || '') && !parseHouseholdStart(custText)
+      && await isPastCustomer(pool, phone);
     if (pastCustomer) {
       const mid = await logInbound(msg, null, phone);
       if (!mid) return log.info('duplicate_ignored', { id: msg.id });
       await sendText(phone, await customerHint(pool, phone));
       log.info('message_handled', { id: msg.id, handler: 'customer_hint', from: log.mask(phone), ms: Date.now() - started });
       return;
+    }
+    // Households (roadmap #5): "nyumbani" registers a new phone for household group buying, without vendor sign-up.
+    const household = !open && !session && custText ? parseHouseholdStart(custText) : null;
+    if (household) {
+      const hh = await startHousehold(pool, phone, household);
+      if (hh) {
+        const mid = await logInbound(msg, hh.id, phone);
+        if (!mid) return log.info('duplicate_ignored', { id: msg.id });
+        await sendText(phone, hh.reply);
+        log.info('message_handled', { id: msg.id, handler: 'household_start', vendor: hh.id, ms: Date.now() - started });
+        return;
+      }
     }
     if (open || session) {
       const mid = await logInbound(msg, null, phone);
@@ -125,6 +139,7 @@ async function processWebhook(body) {
 // Decide which handler answers a text message. Order matters: earlier handlers win.
 // Returns { handler, reply }, or null when no reply should be sent.
 async function routeText({ vendor, vendorId, messageId, text, lang = 'sw' }) {
+  if (vendor.kind === 'household') return householdRoute(pool, { vendor, vendorId, messageId, text, lang });
   // Deletion works with or without consent; then nothing else runs until the vendor has agreed.
   const deletion = await deletionReply(pool, vendorId, text, lang);
   if (deletion) return { handler: 'deletion', reply: deletion };
